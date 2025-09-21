@@ -7,7 +7,11 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { DataTable } from "@/components/ui/data-table"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Pagination } from "@/components/ui/pagination"
 import { Plus, Search, Settings, Eye, Edit } from "lucide-react"
+import {
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import {
   Select,
   SelectContent,
@@ -19,6 +23,7 @@ import { NewProjectForm } from "@/components/forms/new-project-form"
 import EditProjectForm from "@/components/forms/edit-project-form"
 import ViewProjectForm from "@/components/forms/project-view"
 import { useAuth } from "@/lib/auth-context"
+import { usePagination } from "@/hooks/use-pagination"
 
 // Columns definition
 const columns = [
@@ -31,9 +36,15 @@ const columns = [
   { key: "status", label: "Statut" },
   { key: "actions", label: "Actions", className: "text-center" },
 ]
-async function fetchProjectsForUser(user: { role: string; department?: string | number | null }): Promise<any[]> {
+async function fetchProjectsForUser(
+  user: { role: string; department?: string | number | null },
+  page: number = 1,
+  pageSize: number = 10
+): Promise<{ projects: any[]; pagination: any }> {
   const base = "http://localhost:8000/api/management"
+  
   const allowedDepartments = new Set(["CIE Direct", "Tech Center", "TTO", "Clinique Industrielle"]) 
+
   const mapProjects = (projects: any[]) =>
     projects.map((p: any) => ({
       id: p.id,
@@ -51,36 +62,42 @@ async function fetchProjectsForUser(user: { role: string; department?: string | 
     }))
 
   if (user.role === "director") {
-    const depRes = await fetch(`${base}/departments/`, { credentials: "include" })
-    if (!depRes.ok) return []
-    const departments = (await depRes.json()).filter((d: any) => allowedDepartments.has(d.name))
-    const projectLists = await Promise.all(
-      departments.map(async (dep: any) => {
-        const res = await fetch(`${base}/departments/${dep.id}/projects/`, { credentials: "include" })
-        if (!res.ok) return []
-        const projs = await res.json()
-        return mapProjects(projs)
-      })
-    )
-    return projectLists.flat()
+    const depRes = await fetch(`${base}/all/projects/?page=${page}&size=${pageSize}`, { credentials: "include" })
+    console.log(depRes)
+    if (!depRes.ok) return { projects: [], pagination: {} }
+    const raw = await depRes.json()
+    // Handle paginated response
+    const projects = raw.results || raw
+    return { 
+      projects: mapProjects(Array.isArray(projects) ? projects : []),
+      pagination: raw
+    }
   }
 
   if (user.role === "department_manager" && user.department) {
-    const res = await fetch(`${base}/departments/${user.department}/projects/`, { credentials: "include" })
-    if (!res.ok) return []
-    const projs = await res.json()
-    return mapProjects(projs)
+    const res = await fetch(`${base}/departments/${user.department}/projects/?page=${page}&size=${pageSize}`, { credentials: "include" })
+    console.log(res)
+    if (!res.ok) return { projects: [], pagination: {} }
+    const raw = await res.json()
+    // Handle paginated response
+    const projects = raw.results || raw
+    return { 
+      projects: mapProjects(Array.isArray(projects) ? projects : []),
+      pagination: raw
+    }
   }
 
-  return []
+  return { projects: [], pagination: {} }
 }
 
 const initialProjectData: any[] = []
 
 export default function ProjectsPage() {
   const { user } = useAuth()
+  const { pagination, goToPage, updateFromResponse } = usePagination(10)
   const [projects, setProjects] = useState(initialProjectData)
   const [editingProject, setEditingProject] = useState<any | null>(null)
+  const [loading, setLoading] = useState(false)
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("")
@@ -88,27 +105,31 @@ export default function ProjectsPage() {
   const [selectedStatus, setSelectedStatus] = useState("all")
   const [viewingProject, setViewingProject] = useState<any | null>(null)
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        if (!user) return
-        const data = await fetchProjectsForUser(user)
-        setProjects(data)
-      } catch (e) {
-        // ignore
-      }
+  async function reload() {
+    if (!user) return
+    setLoading(true)
+    try {
+      const data = await fetchProjectsForUser(user, pagination.currentPage, pagination.pageSize)
+      setProjects(data.projects)
+      updateFromResponse(data.pagination)
+    } finally {
+      setLoading(false)
     }
-    load()
-  }, [user])
+  }
+
+  useEffect(() => {
+    reload()
+  }, [user, pagination.currentPage, pagination.pageSize])
+
+  const handlePageChange = (page: number) => {
+    goToPage(page)
+  }
 
 
   // Update logic
   const handleSave = (updatedProject: any) => {
-    setProjects((prev) =>
-      prev.map((p) =>
-        p.code === updatedProject.code ? { ...p, ...updatedProject } : p
-      )
-    )
+    setProjects((prev) => prev.map((p) => (p.code === updatedProject.code ? { ...p, ...updatedProject } : p)))
+    void reload()
   }
 
   // Add actions column dynamically
@@ -130,6 +151,29 @@ export default function ProjectsPage() {
         >
           <Edit className="h-4 w-4" />
         </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={async () => {
+            if (!user) return
+            if (!confirm("Supprimer ce projet ?")) return
+            try {
+              const depId = project.departmentId
+              const projId = project.id
+              if (depId && projId) {
+                await fetch(`http://localhost:8000/api/management/departments/${depId}/projects/${projId}/`, {
+                  method: "DELETE",
+                  credentials: "include",
+                })
+                await reload()
+              }
+            } catch {
+              // ignore
+            }
+          }}
+        >
+          Suppr.
+        </Button>
       </div>
     ),
   }))
@@ -148,13 +192,17 @@ export default function ProjectsPage() {
         <div className="flex items-center gap-2">
           <NewProjectForm onCreated={async () => {
             if (!user) return
-            const data = await fetchProjectsForUser(user)
-            setProjects(data)
+            const data = await fetchProjectsForUser(user, pagination.currentPage, pagination.pageSize)
+            setProjects(data.projects)
+            updateFromResponse(data.pagination)
           }}>
+            <DialogTrigger asChild>
             <Button className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
               Nouveau Projet
             </Button>
+          </DialogTrigger>
+
           </NewProjectForm>
           <Button
   
@@ -212,7 +260,19 @@ export default function ProjectsPage() {
         </CardContent>
       </Card>
 
-      <DataTable title="Liste des Projets" columns={columns} data={dataWithActions} />
+      <DataTable title="Liste des Projets" columns={columns} data={dataWithActions} loading={loading} />
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-muted-foreground">
+          Affichage de {projects.length} projet(s) sur {pagination.totalCount} total
+        </div>
+        <Pagination
+          currentPage={pagination.currentPage}
+          totalPages={pagination.totalPages}
+          onPageChange={handlePageChange}
+        />
+      </div>
 
       {/* Edit modal */}
       {editingProject && (

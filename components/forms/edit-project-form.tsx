@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -19,6 +20,7 @@ export default function EditProjectForm({
   onSave: (updated: any) => void
   onClose: () => void
 }) {
+  const { user } = useAuth()
   const [formData, setFormData] = useState({ ...project })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -62,7 +64,23 @@ export default function EditProjectForm({
             Annuler
           </Button>
           <Button
-            onClick={() => {
+            onClick={async () => {
+              try {
+                const depId = project.departmentId
+                const projId = project.id
+                if (depId && projId) {
+                  const payload = {
+                    project_name: formData.name,
+                    coordinator: formData.coordinator,
+                  }
+                  await fetch(`http://localhost:8000/api/management/departments/${depId}/projects/${projId}/`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify(payload),
+                  })
+                }
+              } catch {}
               onSave(formData)
               onClose()
             }}

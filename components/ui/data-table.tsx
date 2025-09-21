@@ -17,9 +17,10 @@ interface DataTableProps {
     label: string
     value: string
   }[]
+  loading?: boolean
 }
 
-export function DataTable({ title, columns, data, summary }: DataTableProps) {
+export function DataTable({ title, columns, data, summary, loading = false }: DataTableProps) {
   return (
     <Card>
       <CardHeader>
@@ -48,7 +49,13 @@ export function DataTable({ title, columns, data, summary }: DataTableProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.length === 0 ? (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">
+                    Chargement en cours...
+                  </TableCell>
+                </TableRow>
+              ) : data.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">
                     Aucune donnée disponible pour la période sélectionnée.

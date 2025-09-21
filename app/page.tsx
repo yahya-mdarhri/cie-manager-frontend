@@ -34,14 +34,18 @@ export default function Dashboard() {
       async function listProjects(depId: number) {
         const r = await fetch(`${base}/departments/${depId}/projects/`, { credentials: "include" })
         if (!r.ok) return []
-        return r.json()
+        const raw = await r.json()
+        // Handle paginated response
+        return raw.results || raw
       }
 
       let projects: any[] = []
       if (user.role === "director") {
         const depRes = await fetch(`${base}/departments/`, { credentials: "include" })
         if (depRes.ok) {
-          const deps = (await depRes.json()).filter((d: any) => allowed.has(d.name))
+          const raw = await depRes.json()
+          const arr = Array.isArray(raw.results || raw) ? (raw.results || raw) : []
+          const deps = arr.filter((d: any) => allowed.has(d.name))
           for (const d of deps) {
             const p = await listProjects(d.id)
             projects = projects.concat(p)
@@ -82,7 +86,8 @@ export default function Dashboard() {
           fetch(`${base}/departments/${depId}/projects/${p.id}/payments/`, { credentials: "include" }),
         ])
         if (expRes.ok) {
-          const exps = await expRes.json()
+          const raw = await expRes.json()
+          const exps = raw.results || raw
           exps.slice(-2).forEach((e: any) =>
             recentItems.push({
               title: "Dépense approuvée",
@@ -93,7 +98,8 @@ export default function Dashboard() {
           )
         }
         if (payRes.ok) {
-          const pays = await payRes.json()
+          const raw = await payRes.json()
+          const pays = raw.results || raw
           pays.slice(-2).forEach((pr: any) =>
             recentItems.push({
               title: "Encaissement reçu",

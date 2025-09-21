@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react"
 import { FilterBar } from "@/components/ui/filter-bar"
 import { DataTable } from "@/components/ui/data-table"
+import { Pagination } from "@/components/ui/pagination"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
+import { usePagination } from "@/hooks/use-pagination"
 
 const filterFields = [
   { type: "date" as const, key: "startDate", label: "Date de début", placeholder: "dd/mm/yyyy" },
@@ -55,7 +57,11 @@ const columns = [
   { key: "supplier", label: "Fournisseur" },
 ]
 
-async function fetchExpensesForUser(user: { role: string; department?: string | number | null }) {
+async function fetchExpensesForUser(
+  user: { role: string; department?: string | number | null },
+  page: number = 1,
+  pageSize: number = 10
+) {
   const base = "http://localhost:8000/api/management"
   const allowedDepartments = new Set(["CIE Direct", "Tech Center", "TTO", "Clinique Industrielle"]) 
 
@@ -68,71 +74,105 @@ async function fetchExpensesForUser(user: { role: string; department?: string | 
     return <Badge variant="default">Autre</Badge>
   }
 
-  async function listDepartmentProjects(depId: number) {
-    const res = await fetch(`${base}/departments/${depId}/projects/`, { credentials: "include" })
-    if (!res.ok) return []
-    return res.json()
+  // For directors, use the all expenses endpoint for proper pagination
+  if (user.role === "director") {
+    const expRes = await fetch(`${base}/all/expenses/?page=${page}&size=${pageSize}`, { credentials: "include" })
+    if (!expRes.ok) return { records: [], pagination: {} }
+    const raw = await expRes.json()
+    const expenses = raw.results || raw
+    
+    const records = expenses.map((e: any) => ({
+      project: e.project?.project_name || "N/A",
+      code: e.project?.project_code || "N/A",
+      date: e.expense_date,
+      amount: formatMoney(e.amount),
+      amountValue: Number(e.amount || 0),
+      category: categoryBadge(e.category),
+      supplier: e.supplier || "-",
+    }))
+
+    return { records, pagination: raw }
   }
 
-  const records: any[] = []
-  if (user.role === "director") {
-    const depRes = await fetch(`${base}/departments/`, { credentials: "include" })
-    if (!depRes.ok) return []
-    const departments = (await depRes.json()).filter((d: any) => allowedDepartments.has(d.name))
-    for (const dep of departments) {
-      const projects = await listDepartmentProjects(dep.id)
-      for (const p of projects) {
-        const expRes = await fetch(`${base}/departments/${dep.id}/projects/${p.id}/expenses/`, { credentials: "include" })
-        if (!expRes.ok) continue
-        const expenses = await expRes.json()
+  // For department managers, fetch from their department's projects
+  if (user.role === "department_manager" && user.department) {
+    const depId = Number(user.department)
+    
+    // First get all projects for the department
+    const projectsRes = await fetch(`${base}/departments/${depId}/projects/?page=1&size=100`, { credentials: "include" })
+    if (!projectsRes.ok) return { records: [], pagination: {} }
+    const projectsRaw = await projectsRes.json()
+    const projects = projectsRaw.results || projectsRaw
+
+    // Collect all expenses from all projects
+    const allExpenses: any[] = []
+    for (const p of projects) {
+      const expRes = await fetch(`${base}/departments/${depId}/projects/${p.id}/expenses/?page=1&size=100`, { credentials: "include" })
+      if (expRes.ok) {
+        const raw = await expRes.json()
+        const expenses = raw.results || raw
         expenses.forEach((e: any) => {
-          records.push({
-            project: p.project_name,
-            code: p.project_code,
-            date: e.expense_date,
-            amount: formatMoney(e.amount),
-            amountValue: Number(e.amount || 0),
-            category: categoryBadge(e.category),
-            supplier: e.supplier || "-",
+          allExpenses.push({
+            ...e,
+            project_name: p.project_name,
+            project_code: p.project_code,
           })
         })
       }
     }
-  } else if (user.role === "department_manager" && user.department) {
-    const depId = Number(user.department)
-    const projects = await listDepartmentProjects(depId)
-    for (const p of projects) {
-      const expRes = await fetch(`${base}/departments/${depId}/projects/${p.id}/expenses/`, { credentials: "include" })
-      if (!expRes.ok) continue
-      const expenses = await expRes.json()
-      expenses.forEach((e: any) => {
-        records.push({
-          project: p.project_name,
-          code: p.project_code,
-          date: e.expense_date,
-          amount: formatMoney(e.amount),
-          amountValue: Number(e.amount || 0),
-          category: categoryBadge(e.category),
-          supplier: e.supplier || "-",
-        })
-      })
+
+    // Implement frontend pagination for department managers
+    const startIndex = (page - 1) * pageSize
+    const endIndex = startIndex + pageSize
+    const paginatedExpenses = allExpenses.slice(startIndex, endIndex)
+
+    const records = paginatedExpenses.map((e: any) => ({
+      project: e.project_name,
+      code: e.project_code,
+      date: e.expense_date,
+      amount: formatMoney(e.amount),
+      amountValue: Number(e.amount || 0),
+      category: categoryBadge(e.category),
+      supplier: e.supplier || "-",
+    }))
+
+    return { 
+      records, 
+      pagination: { 
+        page, 
+        total: Math.ceil(allExpenses.length / pageSize), 
+        count: allExpenses.length 
+      } 
     }
   }
-  return records
+
+  return { records: [], pagination: {} }
 }
 
 export default function ExpensesPage() {
   const { user } = useAuth()
+  const { pagination, goToPage, updateFromResponse } = usePagination(10)
   const [rows, setRows] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     const load = async () => {
       if (!user) return
-      const data = await fetchExpensesForUser(user)
-      setRows(data)
+      setLoading(true)
+      try {
+        const data = await fetchExpensesForUser(user, pagination.currentPage, pagination.pageSize)
+        setRows(data.records)
+        updateFromResponse(data.pagination)
+      } finally {
+        setLoading(false)
+      }
     }
     load()
-  }, [user])
+  }, [user, pagination.currentPage, pagination.pageSize])
+
+  const handlePageChange = (page: number) => {
+    goToPage(page)
+  }
 
   const handleFilter = () => {}
   const handleReset = () => {}
@@ -154,7 +194,19 @@ export default function ExpensesPage() {
 
       <FilterBar fields={filterFields} onFilter={handleFilter} onReset={handleReset} />
 
-      <DataTable title="Liste des Dépenses" columns={columns} data={rows} summary={summary} />
+      <DataTable title="Liste des Dépenses" columns={columns} data={rows} summary={summary} loading={loading} />
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-muted-foreground">
+          Affichage de {rows.length} dépense(s) sur {pagination.totalCount} total
+        </div>
+        <Pagination
+          currentPage={pagination.currentPage}
+          totalPages={pagination.totalPages}
+          onPageChange={handlePageChange}
+        />
+      </div>
     </div>
   )
 }

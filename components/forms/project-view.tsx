@@ -1,6 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
+import { useEffect, useState } from "react"
 import {
   X,
   Download,
@@ -19,9 +20,9 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import jsPDF from "jspdf"
-import { useEffect, useState } from "react"
 
 interface Project {
+  id?: number
   name: string
   code: string
   department: string
@@ -34,6 +35,17 @@ interface Project {
   endDate?: string
   budgetVentilation?: { label: string; amount: number; color?: string | null}[]
   timeline?: { step: string; date?: string; completed?: boolean }[]
+  departmentId?: number
+}
+
+interface ProjectStep {
+  id: number
+  step_name: string
+  deliverable: string
+  start_date: string
+  end_date: string
+  execution_status: boolean
+  execution_proof?: string
 }
 
 export default function ProjectViewModal({
@@ -43,6 +55,33 @@ export default function ProjectViewModal({
   project: Project
   onClose: () => void
 }) {
+  const [projectSteps, setProjectSteps] = useState<ProjectStep[]>([])
+  const [loadingSteps, setLoadingSteps] = useState(false)
+
+  useEffect(() => {
+    const fetchProjectSteps = async () => {
+      if (!project.id || !project.departmentId) return
+      
+      setLoadingSteps(true)
+      try {
+        const res = await fetch(
+          `http://localhost:8000/api/management/departments/${project.departmentId}/projects/${project.id}/steps/`,
+          { credentials: "include" }
+        )
+        if (res.ok) {
+          const raw = await res.json()
+          const steps = raw.results || raw
+          setProjectSteps(Array.isArray(steps) ? steps : [])
+        }
+      } catch (error) {
+        console.error("Error fetching project steps:", error)
+      } finally {
+        setLoadingSteps(false)
+      }
+    }
+
+    fetchProjectSteps()
+  }, [project.id, project.departmentId])
   const formatCurrency = (amount: string | number) => {
     const numAmount = typeof amount === "string" ? Number.parseFloat(amount.replace(/[^\d.-]/g, "")) : amount
     return (
@@ -50,30 +89,6 @@ export default function ProjectViewModal({
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }).format(numAmount) + " MAD"
-    )
-  }
-
-  function ProjectSteps({ projectCode }: { projectCode: string }) {
-    const [items, setItems] = useState<any[]>([])
-    useEffect(() => {
-      const load = async () => {
-        try {
-          // We need department and project ids; they are not passed here, so just show placeholder
-          setItems([])
-        } catch {}
-      }
-      load()
-    }, [projectCode])
-    if (!items.length) return <p className="text-gray-600">Aucun jalon n'a été défini pour ce projet.</p>
-    return (
-      <div className="space-y-3">
-        {items.map((s, idx) => (
-          <div key={idx} className="flex items-center justify-between border rounded p-3">
-            <span className="font-medium">{s.jalon}</span>
-            <span className="text-sm text-gray-600">{s.statut}</span>
-          </div>
-        ))}
-      </div>
     )
   }
 
@@ -362,7 +377,37 @@ export default function ProjectViewModal({
 
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4">Jalons / Étapes du Projet</h3>
-            <ProjectSteps projectCode={project.code} />
+            {loadingSteps ? (
+              <p className="text-gray-600">Chargement des jalons...</p>
+            ) : projectSteps.length > 0 ? (
+              <div className="space-y-4">
+                {projectSteps.map((step, index) => (
+                  <div key={step.id} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium text-gray-900">{step.step_name}</h4>
+                      <Badge variant={step.execution_status ? "default" : "secondary"}>
+                        {step.execution_status ? "Terminé" : "En cours"}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">{step.deliverable}</p>
+                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <span>Début: {new Date(step.start_date).toLocaleDateString("fr-FR")}</span>
+                      <span>Fin: {new Date(step.end_date).toLocaleDateString("fr-FR")}</span>
+                    </div>
+                    {step.execution_proof && (
+                      <div className="mt-2">
+                        <Button variant="outline" size="sm">
+                          <FileText className="h-4 w-4 mr-2" />
+                          Voir la preuve d'exécution
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-600">Aucun jalon n'a été défini pour ce projet.</p>
+            )}
           </Card>
 
           {/* Footer actions */}

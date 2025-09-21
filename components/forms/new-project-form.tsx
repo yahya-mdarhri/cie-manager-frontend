@@ -13,8 +13,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { CalendarIcon, Plus, Upload, ChevronDown, ChevronRight, Info } from "lucide-react"
-import { format } from "date-fns"
-import { fr } from "date-fns/locale"
 import { useAuth } from "@/lib/auth-context"
 
 interface NewProjectFormProps {
@@ -143,7 +141,10 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
           }
           return
         }
-        const res = await fetch("http://localhost:8000/api/management/departments/", { credentials: "include" })
+        const res = await fetch("http://localhost:8000/api/management/departments/", {
+          credentials: "include",
+        })
+        console.log("Fetched departments:", res)
         if (res.ok) {
           const all = await res.json()
           const data = (Array.isArray(all) ? all : []).filter((d: any) => allowed.has(d.name))
@@ -252,9 +253,15 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
         const validSteps = steps.filter((s) => s.jalon || s.livrable)
         for (const s of validSteps) {
           const fdStep = new FormData()
-          fdStep.append("jalon", s.jalon)
-          fdStep.append("livrable", s.livrable)
-          if (s.file) fdStep.append("preuve_execution", s.file)
+          fdStep.append("step_name", s.jalon)
+          fdStep.append("deliverable", s.livrable)
+          // Add required dates for project steps
+          const today = new Date()
+          const startDate = today.toISOString().slice(0, 10)
+          const endDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+          fdStep.append("start_date", startDate)
+          fdStep.append("end_date", endDate)
+          if (s.file) fdStep.append("execution_proof", s.file)
           try {
             await fetch(
               `http://localhost:8000/api/management/departments/${departmentId}/projects/${createdProjectId}/steps/create/`,
