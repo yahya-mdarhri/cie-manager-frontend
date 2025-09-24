@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useAuth } from "@/lib/auth-context"
+import { http } from "@/lib/http"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -60,7 +61,7 @@ export default function EditProjectForm({
           />
         </div>
         <div className="flex justify-end gap-2 mt-4">
-          <Button variant="outline" onClick={onClose}>
+          <Button  onClick={onClose}>
             Annuler
           </Button>
           <Button
@@ -73,12 +74,7 @@ export default function EditProjectForm({
                     project_name: formData.name,
                     coordinator: formData.coordinator,
                   }
-                  await fetch(`http://localhost:8000/api/management/departments/${depId}/projects/${projId}/`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    credentials: "include",
-                    body: JSON.stringify(payload),
-                  })
+                  await http.put(`/api/management/departments/${depId}/projects/${projId}/`, payload)
                 }
               } catch {}
               onSave(formData)

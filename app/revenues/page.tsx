@@ -7,6 +7,7 @@ import { Pagination } from "@/components/ui/pagination"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
 import { usePagination } from "@/hooks/use-pagination"
+import { http } from "@/lib/http"
 
 const filterFields = [
   { type: "date" as const, key: "startDate", label: "Date de début", placeholder: "dd/mm/yyyy" },
@@ -18,9 +19,10 @@ const filterFields = [
     placeholder: "Tous",
     options: [
       { value: "all", label: "Tous" },
-      { value: "tech", label: "Tech Center" },
-      { value: "cie", label: "CIE" },
-      { value: "tto", label: "TTO" },
+      { value: "CIE Direct", label: "CIE Direct" },
+      { value: "Tech Center", label: "Tech Center" },
+      { value: "TTO", label: "TTO" },
+      { value: "Clinique Industrielle", label: "Clinique Industrielle" },
     ],
   },
   {
@@ -30,19 +32,22 @@ const filterFields = [
     placeholder: "Tous",
     options: [
       { value: "all", label: "Tous" },
-      { value: "newrest", label: "Newrest" },
-      { value: "el-maadani", label: "El Maadani" },
+      { value: "Omar Jebbouri", label: "Omar Jebbouri" },
+      { value: "Wacim Benyahya", label: "Wacim Benyahya" },
+      { value: "Bertrand Denise", label: "Bertrand Denise" },
     ],
   },
   {
     type: "select" as const,
-    key: "project",
-    label: "Projet",
+    key: "paymentType",
+    label: "Type de Paiement",
     placeholder: "Tous",
     options: [
       { value: "all", label: "Tous" },
-      { value: "innovacteurs", label: "Innov'acteurs" },
-      { value: "retrofitting", label: "Retrofitting" },
+      { value: "Bank Transfer", label: "Virement Bancaire" },
+      { value: "Check", label: "Chèque" },
+      { value: "Cash", label: "Espèces" },
+      { value: "Other", label: "Autre" },
     ],
   },
 ]
@@ -62,16 +67,14 @@ async function fetchRevenuesForUser(
   page: number = 1,
   pageSize: number = 10
 ) {
-  const base = "http://localhost:8000/api/management"
+  const base = "/api/management"
   const allowedDepartments = new Set(["CIE Direct", "Tech Center", "TTO", "Clinique Industrielle"]) 
   const formatMoney = (n: number) => Number(n || 0).toLocaleString("fr-FR", { style: "currency", currency: "MAD" })
   const typeBadge = (t?: string) => <Badge variant="default">{t || "-"}</Badge>
 
   // For directors, use the all payments endpoint for proper pagination
   if (user.role === "director") {
-    const payRes = await fetch(`${base}/all/payments/?page=${page}&size=${pageSize}`, { credentials: "include" })
-    if (!payRes.ok) return { rows: [], pagination: {} }
-    const raw = await payRes.json()
+    const { data: raw } = await http.get(`${base}/all/payments/`, { params: { page, size: pageSize } })
     const payments = raw.results || raw
     
     const rows = payments.map((pr: any) => ({
@@ -83,6 +86,10 @@ async function fetchRevenuesForUser(
       paymentType: typeBadge(pr.payment_type),
       reference: pr.payment_reference || "-",
       description: pr.description || "-",
+      // Additional fields for filtering
+      projectDepartment: pr.project?.department?.name || "",
+      projectCoordinator: pr.project?.coordinator || "",
+      paymentTypeText: pr.payment_type || "",
     }))
 
     return { rows, pagination: raw }
@@ -93,26 +100,23 @@ async function fetchRevenuesForUser(
     const depId = Number(user.department)
     
     // First get all projects for the department
-    const projectsRes = await fetch(`${base}/departments/${depId}/projects/?page=1&size=100`, { credentials: "include" })
-    if (!projectsRes.ok) return { rows: [], pagination: {} }
-    const projectsRaw = await projectsRes.json()
+    const { data: projectsRaw } = await http.get(`${base}/departments/${depId}/projects/`, { params: { page: 1, size: 100 } })
     const projects = projectsRaw.results || projectsRaw
 
     // Collect all payments from all projects
     const allPayments: any[] = []
     for (const p of projects) {
-      const payRes = await fetch(`${base}/departments/${depId}/projects/${p.id}/payments/?page=1&size=100`, { credentials: "include" })
-      if (payRes.ok) {
-        const raw = await payRes.json()
-        const payments = raw.results || raw
-        payments.forEach((pr: any) => {
-          allPayments.push({
-            ...pr,
-            project_name: p.project_name,
-            project_code: p.project_code,
-          })
+      const { data: raw } = await http.get(`${base}/departments/${depId}/projects/${p.id}/payments/`, { params: { page: 1, size: 100 } })
+      const payments = raw.results || raw
+      payments.forEach((pr: any) => {
+        allPayments.push({
+          ...pr,
+          project_name: p.project_name,
+          project_code: p.project_code,
+          projectDepartment: p.department?.name || "",
+          projectCoordinator: p.coordinator || "",
         })
-      }
+      })
     }
 
     // Implement frontend pagination for department managers
@@ -129,6 +133,10 @@ async function fetchRevenuesForUser(
       paymentType: typeBadge(pr.payment_type),
       reference: pr.payment_reference || "-",
       description: pr.description || "-",
+      // Additional fields for filtering
+      projectDepartment: pr.projectDepartment || "",
+      projectCoordinator: pr.projectCoordinator || "",
+      paymentTypeText: pr.payment_type || "",
     }))
 
     return { 
@@ -148,29 +156,88 @@ export default function RevenuesPage() {
   const { user } = useAuth()
   const { pagination, goToPage, updateFromResponse } = usePagination(10)
   const [rows, setRows] = useState<any[]>([])
+  const [allRows, setAllRows] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [filters, setFilters] = useState<Record<string, string>>({})
+
+  const applyFilters = (data: any[], currentFilters: Record<string, string>) => {
+    return data.filter((row) => {
+      // Date range filter
+      if (currentFilters.startDate) {
+        const rowDate = new Date(row.date)
+        const startDate = new Date(currentFilters.startDate)
+        if (rowDate < startDate) return false
+      }
+      if (currentFilters.endDate) {
+        const rowDate = new Date(row.date)
+        const endDate = new Date(currentFilters.endDate)
+        if (rowDate > endDate) return false
+      }
+
+      // Department filter
+      if (currentFilters.department && currentFilters.department !== "all") {
+        const projectDepartment = row.projectDepartment || ""
+        if (!projectDepartment.toLowerCase().includes(currentFilters.department.toLowerCase())) return false
+      }
+
+      // Coordinator filter
+      if (currentFilters.coordinator && currentFilters.coordinator !== "all") {
+        const projectCoordinator = row.projectCoordinator || ""
+        if (!projectCoordinator.toLowerCase().includes(currentFilters.coordinator.toLowerCase())) return false
+      }
+
+      // Payment type filter
+      if (currentFilters.paymentType && currentFilters.paymentType !== "all") {
+        const paymentTypeText = row.paymentTypeText || ""
+        if (!paymentTypeText.toLowerCase().includes(currentFilters.paymentType.toLowerCase())) return false
+      }
+
+      return true
+    })
+  }
 
   useEffect(() => {
     const load = async () => {
       if (!user) return
       setLoading(true)
       try {
-        const data = await fetchRevenuesForUser(user, pagination.currentPage, pagination.pageSize)
-        setRows(data.rows)
-        updateFromResponse(data.pagination)
+        const data = await fetchRevenuesForUser(user, 1, 1000) // Load more data for filtering
+        setAllRows(data.rows)
+        const filteredData = applyFilters(data.rows, filters)
+        setRows(filteredData.slice(0, pagination.pageSize))
+        updateFromResponse({ page: 1, total: Math.ceil(filteredData.length / pagination.pageSize), count: filteredData.length })
       } finally {
         setLoading(false)
       }
     }
     load()
-  }, [user, pagination.currentPage, pagination.pageSize])
+  }, [user])
+
+  useEffect(() => {
+    const filteredData = applyFilters(allRows, filters)
+    const startIndex = (pagination.currentPage - 1) * pagination.pageSize
+    const endIndex = startIndex + pagination.pageSize
+    setRows(filteredData.slice(startIndex, endIndex))
+    updateFromResponse({ 
+      page: pagination.currentPage, 
+      total: Math.ceil(filteredData.length / pagination.pageSize), 
+      count: filteredData.length 
+    })
+  }, [filters, pagination.currentPage, allRows])
 
   const handlePageChange = (page: number) => {
     goToPage(page)
   }
 
-  const handleFilter = () => {}
-  const handleReset = () => {}
+  const handleFilter = (newFilters: Record<string, string>) => {
+    setFilters(newFilters)
+    goToPage(1) // Reset to first page when filtering
+  }
+
+  const handleReset = () => {
+    setFilters({})
+    goToPage(1)
+  }
 
   const totalAmount = rows.reduce((sum, r: any) => sum + Number(r.amountValue || 0), 0)
   const totalAmountStr = Number(totalAmount).toLocaleString("fr-FR", { style: "currency", currency: "MAD" })

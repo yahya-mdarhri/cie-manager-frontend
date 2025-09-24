@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { createContext, useContext, useEffect, useState } from "react"
+import { http } from "@/lib/http"
 import { useRouter } from "next/navigation"
 
 interface User {
@@ -37,9 +38,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return
         }
         // Fallback to server validation via cookie
-        const res = await fetch("http://localhost:8000/api/accounts/me/", { credentials: "include" })
-        if (res.ok) {
-          const data = await res.json()
+        const res = await http.get(`/api/accounts/me/`)
+        if (res.status === 200) {
+          const data = res.data
           const fullName = [data.first_name, data.last_name].filter(Boolean).join(" ")
           const u = {
             id: String(data.id ?? ""),
@@ -71,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      await fetch("http://localhost:8000/api/accounts/logout/", { method: "POST", credentials: "include" })
+      await http.post(`/api/accounts/logout/`)
     } catch (e) {
       // ignore network errors here
     } finally {

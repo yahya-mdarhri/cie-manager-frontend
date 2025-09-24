@@ -3,7 +3,7 @@ export class ApiClient {
   private static baseUrl = "/api"
 
   static async get<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`)
+    const response = await fetch(`${this.baseUrl}${endpoint}`, { credentials: "include" })
     if (!response.ok) {
       throw new Error(`API Error: ${response.statusText}`)
     }
@@ -16,6 +16,7 @@ export class ApiClient {
       headers: {
         "Content-Type": "application/json",
       },
+      credentials: "include",
       body: JSON.stringify(data),
     })
     if (!response.ok) {
@@ -30,6 +31,7 @@ export class ApiClient {
       headers: {
         "Content-Type": "application/json",
       },
+      credentials: "include",
       body: JSON.stringify(data),
     })
     if (!response.ok) {
@@ -41,6 +43,7 @@ export class ApiClient {
   static async delete(endpoint: string): Promise<void> {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       method: "DELETE",
+      credentials: "include",
     })
     if (!response.ok) {
       throw new Error(`API Error: ${response.statusText}`)

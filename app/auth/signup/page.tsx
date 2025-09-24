@@ -13,6 +13,8 @@ import { Eye, EyeOff, UserPlus } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
+import { http } from "@/lib/http"
+import { useEffect } from "react"
 
 export default function SignupPage() {
   const { user } = useAuth()
@@ -24,11 +26,29 @@ export default function SignupPage() {
     department: "",
     role: "user",
   })
+  const [departments, setDepartments] = useState<any[]>([])
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
+
+  useEffect(() => {
+    const loadDepartments = async () => {
+      try {
+        if (!user || user.role !== "director") return
+        const res = await http.get(`/api/management/departments/`)
+        if (res.status !== 200) return
+        const raw = res.data
+        const arr = Array.isArray((raw as any)?.results || raw) ? ((raw as any).results || raw) : []
+        setDepartments(arr)
+        setFormData((prev) => (!prev.department && arr.length > 0 ? { ...prev, department: String(arr[0].id) } : prev))
+      } catch {
+        // ignore
+      }
+    }
+    loadDepartments()
+  }, [user])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,33 +61,23 @@ export default function SignupPage() {
         return
       }
       // Create user via backend endpoint reserved for director
-      const res = await fetch("http://localhost:8000/api/accounts/users/create/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          username: formData.username,
-          email: formData.email,
-        }),
+      const res = await http.post(`/api/accounts/users/create/`, {
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        username: formData.username,
+        email: formData.email,
       })
-      if (!res.ok) {
-        const txt = await res.text()
-        throw new Error(txt || "Échec de création de l'utilisateur")
+      if (res.status !== 201 && res.status !== 200) {
+        throw new Error("Échec de création de l'utilisateur")
       }
-      const created = await res.json()
+      const created = res.data
       // Optionally assign department manager role
       if (formData.role === "department_manager" && formData.department) {
-        const setRes = await fetch(`http://localhost:8000/api/management/departments/${formData.department}/set-manager/`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ manager: created.id }),
+        const setRes = await http.put(`/api/management/departments/${formData.department}/set-manager/`, {
+          manager: created.id,
         })
-        if (!setRes.ok) {
-          const tx = await setRes.text()
-          throw new Error(tx || "Utilisateur créé, mais l'affectation du département a échoué")
+        if (setRes.status !== 200) {
+          throw new Error("Utilisateur créé, mais l'affectation du département a échoué")
         }
       }
       router.push("/")
@@ -147,10 +157,11 @@ export default function SignupPage() {
                         <SelectValue placeholder="Sélectionnez le département" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="1">CIE Direct</SelectItem>
-                        <SelectItem value="2">Tech Center</SelectItem>
-                        <SelectItem value="3">TTO</SelectItem>
-                        <SelectItem value="4">Clinique Industrielle</SelectItem>
+                        {departments.map((d) => (
+                          <SelectItem key={d.id} value={String(d.id)}>
+                            {d.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

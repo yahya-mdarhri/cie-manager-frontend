@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { FolderOpen, DollarSign, TrendingUp, TrendingDown, Download, Calendar } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/lib/auth-context"
+import { http } from "@/lib/http"
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -27,33 +28,23 @@ export default function Dashboard() {
   useEffect(() => {
     const load = async () => {
       if (!user) return
-      const base = "http://localhost:8000/api/management"
-      const allowed = new Set(["CIE Direct", "Tech Center", "TTO", "Clinique Industrielle"]) 
+      const base = "/api/management"
       const formatMoney = (n: number) => Number(n || 0).toLocaleString("fr-FR", { style: "currency", currency: "MAD" })
 
-      async function listProjects(depId: number) {
-        const r = await fetch(`${base}/departments/${depId}/projects/`, { credentials: "include" })
-        if (!r.ok) return []
-        const raw = await r.json()
-        // Handle paginated response
-        return raw.results || raw
-      }
-
       let projects: any[] = []
-      if (user.role === "director") {
-        const depRes = await fetch(`${base}/departments/`, { credentials: "include" })
-        if (depRes.ok) {
-          const raw = await depRes.json()
-          const arr = Array.isArray(raw.results || raw) ? (raw.results || raw) : []
-          const deps = arr.filter((d: any) => allowed.has(d.name))
-          for (const d of deps) {
-            const p = await listProjects(d.id)
-            projects = projects.concat(p)
-          }
+      try {
+        if (user.role === "director") {
+          // Fetch all projects in one call for directors
+          const { data: raw } = await http.get(`${base}/all/projects/`, { params: { page: 1, size: 1000 } })
+          projects = (raw?.results || raw) ?? []
+        } else if (user.role === "department_manager" && user.department) {
+          // Fetch projects for the manager's department
+          const { data: raw } = await http.get(`${base}/departments/${user.department}/projects/`, { params: { page: 1, size: 1000 } })
+          projects = (raw?.results || raw) ?? []
         }
-      } else if (user.role === "department_manager" && user.department) {
-        const p = await listProjects(Number(user.department))
-        projects = projects.concat(p)
+      } catch (e) {
+        // If unauthorized or network issues, leave projects empty; interceptor will redirect on 401
+        projects = []
       }
 
       const totals = projects.reduce(
@@ -76,41 +67,76 @@ export default function Dashboard() {
       })
       setStatusCounts(counts)
 
-      // Recent activity: last few expenses and payments across first few projects
+      // Recent activity
       const recentItems: Array<{ title: string; subtitle: string; color: string; date: string }> = []
-      for (const p of projects.slice(0, 5)) {
-        const depId = p.department?.id || p.department_id || 0
-        if (!depId) continue
-        const [expRes, payRes] = await Promise.all([
-          fetch(`${base}/departments/${depId}/projects/${p.id}/expenses/`, { credentials: "include" }),
-          fetch(`${base}/departments/${depId}/projects/${p.id}/payments/`, { credentials: "include" }),
-        ])
-        if (expRes.ok) {
-          const raw = await expRes.json()
-          const exps = raw.results || raw
-          exps.slice(-2).forEach((e: any) =>
-            recentItems.push({
-              title: "Dépense approuvée",
-              subtitle: `${formatMoney(e.amount)} - ${p.project_name}`,
-              color: "blue",
-              date: e.expense_date,
-            })
-          )
+      try {
+        if (user.role === "director") {
+          // Use global endpoints for directors
+          const [expRes, payRes] = await Promise.allSettled([
+            http.get(`${base}/all/expenses/`, { params: { page: 1, size: 10 } }),
+            http.get(`${base}/all/payments/`, { params: { page: 1, size: 10 } }),
+          ])
+          if (expRes.status === "fulfilled") {
+            const exps = (expRes.value.data?.results || expRes.value.data) ?? []
+            exps.forEach((e: any) =>
+              recentItems.push({
+                title: "Dépense approuvée",
+                subtitle: `${formatMoney(e.amount)} - ${e.project?.project_name ?? "Projet"}`,
+                color: "blue",
+                date: e.expense_date,
+              })
+            )
+          }
+          if (payRes.status === "fulfilled") {
+            const pays = (payRes.value.data?.results || payRes.value.data) ?? []
+            pays.forEach((pr: any) =>
+              recentItems.push({
+                title: "Encaissement reçu",
+                subtitle: `${formatMoney(pr.amount)} - ${pr.project?.project_name ?? "Projet"}`,
+                color: "green",
+                date: pr.payment_received_date,
+              })
+            )
+          }
+        } else {
+          // For managers, pull from each project (best-effort)
+          for (const p of projects.slice(0, 5)) {
+            const depId = p.department?.id || p.department_id || user.department
+            if (!depId) continue
+            const [expRes, payRes] = await Promise.allSettled([
+              http.get(`${base}/departments/${depId}/projects/${p.id}/expenses/`, { params: { page: 1, size: 5 } }),
+              http.get(`${base}/departments/${depId}/projects/${p.id}/payments/`, { params: { page: 1, size: 5 } }),
+            ])
+            if (expRes.status === "fulfilled") {
+              const raw = expRes.value.data
+              const exps = raw.results || raw
+              exps.forEach((e: any) =>
+                recentItems.push({
+                  title: "Dépense approuvée",
+                  subtitle: `${formatMoney(e.amount)} - ${p.project_name}`,
+                  color: "blue",
+                  date: e.expense_date,
+                })
+              )
+            }
+            if (payRes.status === "fulfilled") {
+              const raw = payRes.value.data
+              const pays = raw.results || raw
+              pays.forEach((pr: any) =>
+                recentItems.push({
+                  title: "Encaissement reçu",
+                  subtitle: `${formatMoney(pr.amount)} - ${p.project_name}`,
+                  color: "green",
+                  date: pr.payment_received_date,
+                })
+              )
+            }
+          }
         }
-        if (payRes.ok) {
-          const raw = await payRes.json()
-          const pays = raw.results || raw
-          pays.slice(-2).forEach((pr: any) =>
-            recentItems.push({
-              title: "Encaissement reçu",
-              subtitle: `${formatMoney(pr.amount)} - ${p.project_name}`,
-              color: "green",
-              date: pr.payment_received_date,
-            })
-          )
-        }
+      } catch {
+        // ignore
       }
-      // sort by date desc if possible
+
       recentItems.sort((a, b) => (a.date > b.date ? -1 : 1))
       setRecent(recentItems.slice(0, 6))
     }

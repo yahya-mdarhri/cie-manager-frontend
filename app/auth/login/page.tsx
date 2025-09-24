@@ -10,6 +10,7 @@ import { Eye, EyeOff, LogIn } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
+import { http } from "@/lib/http"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -26,22 +27,15 @@ export default function LoginPage() {
   setError("")
 
   try {
-    const res = await fetch("http://localhost:8000/api/accounts/login/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
-      credentials: "include", // if Django sets cookies (e.g. session or JWT)
-    })
+    const res = await http.post(`/api/accounts/login/`, { email, password })
 
-    if (!res.ok) {
-      const data = await res.json()
+    if (res.status !== 200) {
+      const data = res.data || {}
       setError(data.detail || "Email ou mot de passe incorrect")
       return
     }
 
-    const data = await res.json()
+    const data = res.data
 
     // Backend returns: { user: { id, first_name, last_name, username, email, role, department }, access_token, refresh }
     const fullName = [data.user?.first_name, data.user?.last_name].filter(Boolean).join(" ")

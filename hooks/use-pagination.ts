@@ -78,3 +78,4 @@ export function usePagination(initialPageSize: number = 10): UsePaginationReturn
     updateFromResponse,
   }
 }
+

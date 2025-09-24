@@ -10,6 +10,7 @@ import { Navigation } from "@/components/layout/navigation"
 import { AuthProvider } from "@/lib/auth-context"
 import { AuthGuard } from "@/components/auth/auth-guard"
 import { usePathname } from "next/navigation"
+import { useEffect } from "react"
 
 
 
@@ -32,7 +33,9 @@ export default function RootLayout({
 function AuthGuardWrapper({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
-      <ConditionalLayout>{children}</ConditionalLayout>
+      <GlobalFetchCredentials>
+        <ConditionalLayout>{children}</ConditionalLayout>
+      </GlobalFetchCredentials>
     </div>
   )
 }
@@ -56,4 +59,26 @@ function ConditionalLayout({ children }: { children: React.ReactNode }) {
       </div>
     </AuthGuard>
   )
+}
+
+function GlobalFetchCredentials({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const originalFetch = window.fetch
+    window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+      const nextInit: RequestInit = {
+        credentials: "include",
+        ...init,
+      }
+      // If headers are provided as a plain object, preserve them
+      if (init?.headers && !(init.headers instanceof Headers)) {
+        nextInit.headers = { ...(init.headers as Record<string, string>) }
+      }
+      return originalFetch(input, nextInit)
+    }
+    return () => {
+      window.fetch = originalFetch
+    }
+  }, [])
+  return <>{children}</>
 }

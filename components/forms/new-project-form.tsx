@@ -12,8 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { CalendarIcon, Plus, Upload, ChevronDown, ChevronRight, Info } from "lucide-react"
+import { Plus, Upload, ChevronDown, ChevronRight, Info } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
+import { http } from "@/lib/http"
 
 interface NewProjectFormProps {
   children: React.ReactNode
@@ -67,9 +68,14 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
   const [needsExpressionDate, setNeedsExpressionDate] = useState<Date | undefined>(undefined)
   const [clientPoDate, setClientPoDate] = useState<Date | undefined>(undefined)
   const [endDate, setEndDate] = useState<Date | undefined>(undefined)
-  const [steps, setSteps] = useState<Array<{ jalon: string; livrable: string; file: File | null }>>([
-    { jalon: "", livrable: "", file: null },
-  ])
+  const [steps, setSteps] = useState<
+    Array<{
+      name: string
+      description: string
+      startDate: Date | undefined
+      endDate: Date | undefined
+    }>
+  >([{ name: "", description: "", startDate: undefined, endDate: undefined }])
 
   const toInput = (d?: Date) => {
     if (!d) return ""
@@ -80,7 +86,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
   }
   const fromInput = (v: string) => {
     if (!v) return undefined
-    const [y, m, day] = v.split("-").map((n) => parseInt(n, 10))
+    const [y, m, day] = v.split("-").map((n) => Number.parseInt(n, 10))
     return new Date(y, (m || 1) - 1, day || 1)
   }
   // Synchronize timeline with required dates when dialog opens
@@ -124,36 +130,38 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
     const loadDeps = async () => {
       try {
         const allowed = new Set(["CIE Direct", "Tech Center", "TTO", "Clinique Industrielle"])
+        if (user?.role === "director") {
+          // Fetch ALL departments for directors
+          const { data: raw } = await http.get(`/api/management/departments/`)
+          {
+            const arr = Array.isArray((raw as any)?.results || raw) ? (raw as any).results || raw : []
+            setDepartments(arr)
+            setFormData((prev) =>
+              !prev.department && arr.length > 0 ? { ...prev, department: String(arr[0].id) } : prev,
+            )
+          }
+          
+          return
+        }
+
         if (user?.role === "department_manager" && user.department) {
-          const res = await fetch(`http://localhost:8000/api/management/departments/${user.department}/`, {
-            credentials: "include",
-          })
-          if (res.ok) {
-            const dep = await res.json()
+          const { data: dep } = await http.get(`/api/management/departments/${user.department}/`)
             if (allowed.has(dep.name)) {
               setDepartments([dep])
               setFormData((prev) => ({ ...prev, department: String(dep.id) }))
             } else {
               setDepartments([])
             }
-          } else {
-            setDepartments([])
-          }
           return
         }
-        const res = await fetch("http://localhost:8000/api/management/departments/", {
-          credentials: "include",
-        })
-        console.log("Fetched departments:", res)
-        if (res.ok) {
-          const all = await res.json()
-          const data = (Array.isArray(all) ? all : []).filter((d: any) => allowed.has(d.name))
+        const { data: raw2 } = await http.get(`/api/management/departments/`)
+        {
+          const arr = Array.isArray((raw2 as any)?.results || raw2) ? (raw2 as any).results || raw2 : []
+          const data = user?.role === "director" ? arr : arr.filter((d: any) => allowed.has(d.name))
           setDepartments(data)
           setFormData((prev) =>
             !prev.department && data.length > 0 ? { ...prev, department: String(data[0].id) } : prev,
           )
-        } else {
-          setDepartments([])
         }
       } catch (e) {
         // ignore
@@ -175,8 +183,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
       if (user.role === "department_manager" && user.department) {
         departmentId = Number(user.department)
       } else if (user.role === "director") {
-        const dep = departments.find((d) => String(d.id) === String(formData.department))
-        departmentId = dep?.id ?? null
+        departmentId = Number(formData.department || 0)
       }
       if (!departmentId) {
         throw new Error("Département introuvable")
@@ -221,57 +228,40 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
       if (!formData.contractFile) throw new Error("Le document contractuel est requis")
       fd.append("contract_documents", formData.contractFile)
 
-      const res = await fetch(`http://localhost:8000/api/management/departments/${departmentId}/projects/create/`, {
-        method: "POST",
-        credentials: "include",
-        body: fd,
+      await http.post(`/api/management/departments/${departmentId}/projects/create/`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
       })
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "")
-        let details = "Échec de création du projet"
-        try {
-          const errJson = JSON.parse(errText)
-          details = errJson.details || errText
-        } catch {
-          details = errText || details
-        }
-        throw new Error(details)
-      }
       // Try to locate created project id via project_code
       let createdProjectId: number | null = null
       try {
-        const listRes = await fetch(`http://localhost:8000/api/management/departments/${departmentId}/projects/`, { credentials: "include" })
-        if (listRes.ok) {
-          const projs = await listRes.json()
-          const found = Array.isArray(projs) ? projs.find((p: any) => String(p.project_code) === String(formData.code)) : null
-          if (found?.id) createdProjectId = Number(found.id)
-        }
+        const { data: projs } = await http.get(`/api/management/departments/${departmentId}/projects/`)
+        const list = Array.isArray(projs) ? projs : (Array.isArray(projs?.results) ? projs.results : [])
+        const found = list.find((p: any) => String(p.project_code) === String(formData.code))
+        if (found?.id) createdProjectId = Number(found.id)
       } catch {}
 
       // Create steps (jalons) if provided
       if (createdProjectId) {
-        const validSteps = steps.filter((s) => s.jalon || s.livrable)
+        const validSteps = steps.filter((s) => s.name || s.description)
         for (const s of validSteps) {
           const fdStep = new FormData()
-          fdStep.append("step_name", s.jalon)
-          fdStep.append("deliverable", s.livrable)
-          // Add required dates for project steps
-          const today = new Date()
-          const startDate = today.toISOString().slice(0, 10)
-          const endDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+          fdStep.append("step_name", s.name)
+          fdStep.append("deliverable", s.description)
+          const startDate = s.startDate ? s.startDate.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)
+          const endDate = s.endDate
+            ? s.endDate.toISOString().slice(0, 10)
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
           fdStep.append("start_date", startDate)
           fdStep.append("end_date", endDate)
-          if (s.file) fdStep.append("execution_proof", s.file)
           try {
-            await fetch(
-              `http://localhost:8000/api/management/departments/${departmentId}/projects/${createdProjectId}/steps/create/`,
-              { method: "POST", credentials: "include", body: fdStep }
-            )
+            await http.post(`/api/management/departments/${departmentId}/projects/${createdProjectId}/steps/create/`, fdStep, {
+              headers: { "Content-Type": "multipart/form-data" },
+            })
           } catch {}
         }
       }
 
-    setOpen(false)
+      setOpen(false)
       onCreated?.()
     } catch (err) {
       console.error(err)
@@ -654,36 +644,80 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <Label>Ajouter les jalons du projet et leurs livrables</Label>
+                  <Label>Ajouter les jalons du projet</Label>
                   {steps.map((st, idx) => (
-                    <div key={idx} className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
-                      <Input
-                        placeholder={`Jalon ${idx + 1}`}
-                        value={st.jalon}
-                        onChange={(e) => setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, jalon: e.target.value } : s)))}
-                      />
-                      <Input
-                        placeholder="Livrables du jalon"
-                        value={st.livrable}
-                        onChange={(e) => setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, livrable: e.target.value } : s)))}
-                      />
-                      <Input
-                        type="file"
-                        accept="application/pdf,image/*"
-                        onChange={(e) => setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, file: e.target.files?.[0] || null } : s)))}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSteps((prev) => prev.filter((_, i) => i !== idx))}
-                      >
-                        Retirer
-                      </Button>
+                    <div key={idx} className="space-y-3 p-4 border rounded-lg">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-sm">Nom du jalon</Label>
+                          <Input
+                            placeholder={`Jalon ${idx + 1}`}
+                            value={st.name}
+                            onChange={(e) =>
+                              setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, name: e.target.value } : s)))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-sm">Description</Label>
+                          <Input
+                            placeholder="Description du jalon"
+                            value={st.description}
+                            onChange={(e) =>
+                              setSteps((prev) =>
+                                prev.map((s, i) => (i === idx ? { ...s, description: e.target.value } : s)),
+                              )
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-sm">Date de début</Label>
+                          <Input
+                            type="date"
+                            value={st.startDate ? toInput(st.startDate) : ""}
+                            onChange={(e) => {
+                              const date = fromInput(e.target.value)
+                              setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, startDate: date } : s)))
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-sm">Date de fin</Label>
+                          <Input
+                            type="date"
+                            value={st.endDate ? toInput(st.endDate) : ""}
+                            onChange={(e) => {
+                              const date = fromInput(e.target.value)
+                              setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, endDate: date } : s)))
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSteps((prev) => prev.filter((_, i) => i !== idx))}
+                        >
+                          Retirer
+                        </Button>
+                      </div>
                     </div>
                   ))}
                   <div className="flex gap-2">
-                    <Button type="button" size="sm" onClick={() => setSteps((prev) => [...prev, { jalon: "", livrable: "", file: null }])}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() =>
+                        setSteps((prev) => [
+                          ...prev,
+                          { name: "", description: "", startDate: undefined, endDate: undefined },
+                        ])
+                      }
+                    >
                       <Plus className="h-4 w-4" />
                       Ajouter un jalon
                     </Button>
