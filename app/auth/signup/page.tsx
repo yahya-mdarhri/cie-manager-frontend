@@ -16,6 +16,7 @@ import { useAuth } from "@/lib/auth-context"
 import { http } from "@/lib/http"
 import { useEffect } from "react"
 
+
 export default function SignupPage() {
   const { user } = useAuth()
   const [formData, setFormData] = useState({

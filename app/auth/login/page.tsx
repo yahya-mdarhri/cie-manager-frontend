@@ -128,8 +128,8 @@ export default function LoginPage() {
 
           <div className="mt-4 p-3 bg-muted/50 rounded-lg text-sm text-muted-foreground">
             <p className="font-medium mb-1">Compte de démonstration :</p>
-            <p>Email: admin@cie.ma</p>
-            <p>Mot de passe: admin123</p>
+            <p>Email: michele98@example.net</p>
+            <p>Mot de passe: password123</p>
           </div>
         </CardContent>
       </Card>
