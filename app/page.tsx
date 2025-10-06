@@ -4,10 +4,14 @@ import { useEffect, useState } from "react"
 import { MetricCard } from "@/components/ui/metric-card"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { FolderOpen, DollarSign, TrendingUp, TrendingDown, Download, Calendar } from "lucide-react"
+import { FolderOpen, DollarSign, TrendingUp, TrendingDown, Download, Calendar, Settings, Building2, UserPlus } from "lucide-react"
+import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/lib/auth-context"
 import { http } from "@/lib/http"
+import ExportMenu from "@/components/ui/export-menu"
+import CreateDepartmentForm from "@/components/forms/create-department-form"
+import CreateManagerForm from "@/components/forms/create-manager-form"
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -146,15 +150,15 @@ export default function Dashboard() {
   const fmt = (n: number) => Number(n || 0).toLocaleString("fr-FR", { style: "currency", currency: "MAD" })
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 md:pl-72 space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Tableau de Bord</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Tableau de Bord</h1>
           <p className="text-muted-foreground">Vue d'ensemble de votre activité</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           <Select defaultValue="last-month">
-            <SelectTrigger className="w-40">
+            <SelectTrigger className="w-full sm:w-40">
               <Calendar className="h-4 w-4 mr-2" />
               <SelectValue />
             </SelectTrigger>
@@ -164,15 +168,14 @@ export default function Dashboard() {
               <SelectItem value="last-year">Dernière année</SelectItem>
             </SelectContent>
           </Select>
-          <Button  className="flex items-center gap-2 bg-transparent">
-            <Download className="h-4 w-4" />
-            Exporter les données
-          </Button>
+          <div className="w-full sm:w-auto">
+            <ExportMenu user={user} />
+          </div>
         </div>
       </div>
 
       {/* Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard title="Projets Actifs" value={String(metrics.projects)} icon={FolderOpen} trend={{ value: 0, isPositive: true }} />
         <MetricCard
           title="Budget Total"
@@ -201,12 +204,12 @@ export default function Dashboard() {
             <CardTitle>Activité Récente</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-56 overflow-y-auto sm:max-h-none sm:overflow-visible pr-1">
               {recent.map((it, idx) => (
                 <div key={idx} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                   <div>
                     <p className="font-medium">{it.title}</p>
-                    <p className="text-sm text-muted-foreground">{it.subtitle}</p>
+                    <p className="text-sm text-muted-foreground truncate max-w-[70vw] sm:max-w-none">{it.subtitle}</p>
                   </div>
                   <div className={`h-2 w-2 rounded-full ${it.color === "green" ? "bg-green-500" : "bg-blue-500"}`}></div>
                 </div>
@@ -256,6 +259,43 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Admin Shortcuts for Directors */}
+      {user?.role === "director" && (
+        <Card className="border-blue-200 bg-blue-50/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              Actions d'Administration
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-blue-700 mb-4">
+              En tant que directeur, vous pouvez créer de nouveaux départements et assigner des managers.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <CreateDepartmentForm onCreated={() => console.log('Department created')}>
+                <Button variant="outline" className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4" />
+                  Nouveau Département
+                </Button>
+              </CreateDepartmentForm>
+              <CreateManagerForm onCreated={() => console.log('Manager created')}>
+                <Button variant="outline" className="flex items-center gap-2">
+                  <UserPlus className="h-4 w-4" />
+                  Nouveau Manager
+                </Button>
+              </CreateManagerForm>
+              <Button variant="outline" asChild>
+                <Link href="/admin" className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Administration Complète
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Info Alert */}
       <Card className="border-blue-200 bg-blue-50/50">

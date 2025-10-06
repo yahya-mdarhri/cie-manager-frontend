@@ -27,7 +27,9 @@ import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { http } from "@/lib/http"
 import jsPDF from "jspdf"
+import JalonManagement from "./jalon-management"
 
 interface Project {
   id?: number
@@ -48,15 +50,17 @@ interface Project {
 
 interface ProjectStep {
   id: number
-  step_name: string
-  deliverable: string
+  name: string
+  description: string
   start_date: string
   end_date: string
   execution_status: boolean
+  execution_comments?: string
   execution_proof?: string
+  created_at: string
 }
 
-type ActiveTab = "details" | "edit" | "encaissements" | "depenses" | "documents"
+type ActiveTab = "details" | "edit" | "jalons" | "encaissements" | "depenses" | "documents"
 
 interface Transaction {
   id: number
@@ -423,6 +427,21 @@ export default function ProjectViewModal({
           </Card>
         )
 
+      case "jalons":
+        return (
+          <JalonManagement 
+            projectId={project.id!}
+            departmentId={project.departmentId!}
+            projectEndDate={project.endDate}
+            projectName={project.name}
+            projectDescription={project.description}
+            onUpdate={() => {
+              // Refresh project data if needed
+              console.log("Jalons updated")
+            }}
+          />
+        )
+
       case "depenses":
         const depenses = transactions.filter((t) => t.type === "depense")
         const totalDepenses = depenses.reduce((sum, t) => sum + t.amount, 0)
@@ -635,6 +654,14 @@ export default function ProjectViewModal({
             <Button
               
               size="sm"
+              onClick={() => setActiveTab("jalons")}
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              Jalons
+            </Button>
+            <Button
+              
+              size="sm"
               onClick={() => setActiveTab("encaissements")}
             >
               <CreditCard className="h-4 w-4 mr-2" />
@@ -778,12 +805,12 @@ export default function ProjectViewModal({
                     {projectSteps.map((step, index) => (
                       <div key={step.id} className="border rounded-lg p-4">
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-gray-900">{step.step_name}</h4>
+                          <h4 className="font-medium text-gray-900">{step.name}</h4>
                           <Badge variant={step.execution_status ? "default" : "secondary"}>
                             {step.execution_status ? "Terminé" : "En cours"}
                           </Badge>
                         </div>
-                        <p className="text-sm text-gray-600 mb-2">{step.deliverable}</p>
+                        <p className="text-sm text-gray-600 mb-2">{step.description}</p>
                         <div className="flex items-center gap-4 text-xs text-gray-500">
                           <span>Début: {new Date(step.start_date).toLocaleDateString("fr-FR")}</span>
                           <span>Fin: {new Date(step.end_date).toLocaleDateString("fr-FR")}</span>

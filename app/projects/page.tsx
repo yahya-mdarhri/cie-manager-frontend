@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Pagination } from "@/components/ui/pagination";
-import { Plus, Search, Settings, Eye, Edit } from "lucide-react";
+import { Plus, Search, Settings, Eye, Edit, Download } from "lucide-react";
 import { DialogTrigger } from "@/components/ui/dialog";
 import {
   Select,
@@ -16,12 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { NewProjectForm } from "@/components/forms/new-project-form";
-import EditProjectForm from "@/components/forms/edit-project-form";
-import ViewProjectForm from "@/components/forms/project-view";
-import { useAuth } from "@/lib/auth-context";
-import { usePagination } from "@/hooks/use-pagination";
-import { http } from "@/lib/http";
+import { NewProjectForm } from "@/components/forms/new-project-form"
+import EditProjectForm from "@/components/forms/edit-project-form"
+import ViewProjectForm from "@/components/forms/project-view"
+import { useAuth } from "@/lib/auth-context"
+import { usePagination } from "@/hooks/use-pagination"
+import { http } from "@/lib/http"
+import { exportProjectsServerCSV } from "@/lib/csv-export"
 
 // Columns definition
 const columns = [
@@ -189,6 +190,16 @@ export default function ProjectsPage() {
     void reload();
   };
 
+  const handleExportCSV = async () => {
+    if (!user) return;
+    try {
+      await exportProjectsServerCSV();
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Erreur lors de l\'export des projets');
+    }
+  };
+
   // Add actions column dynamically
   const dataWithActions = filteredProjects.map((project) => ({
     ...project,
@@ -263,6 +274,10 @@ export default function ProjectsPage() {
               Nouveau Projet
             </Button>
           </NewProjectForm>
+          <Button className="flex items-center gap-2 bg-transparent" onClick={handleExportCSV}>
+            <Download className="h-4 w-4" />
+            Exporter CSV
+          </Button>
           <Button className="flex items-center gap-2 bg-transparent">
             <Settings className="h-4 w-4" />
             Paramètres

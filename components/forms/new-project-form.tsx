@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { Plus, Upload, ChevronDown, ChevronRight, Info } from "lucide-react"
+import { Plus, Upload, ChevronDown, ChevronRight, Info, Calendar, Clock, Trash2 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { http } from "@/lib/http"
 
@@ -245,8 +245,8 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
         const validSteps = steps.filter((s) => s.name || s.description)
         for (const s of validSteps) {
           const fdStep = new FormData()
-          fdStep.append("step_name", s.name)
-          fdStep.append("deliverable", s.description)
+          fdStep.append("name", s.name)
+          fdStep.append("description", s.description)
           const startDate = s.startDate ? s.startDate.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)
           const endDate = s.endDate
             ? s.endDate.toISOString().slice(0, 10)
@@ -257,7 +257,9 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
             await http.post(`/api/management/departments/${departmentId}/projects/${createdProjectId}/steps/create/`, fdStep, {
               headers: { "Content-Type": "multipart/form-data" },
             })
-          } catch {}
+          } catch (stepErr) {
+            console.warn("Failed to create step:", stepErr)
+          }
         }
       }
 
@@ -640,88 +642,216 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Étapes / Jalons du Projet</CardTitle>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Jalons du Projet
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Définissez les étapes clés et les livrables de votre projet avec des dates précises.
+                </p>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  <Label>Ajouter les jalons du projet</Label>
+                <div className="space-y-4">
+                  {steps.length > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Info className="h-4 w-4 text-blue-600" />
+                        <span className="text-sm font-medium text-blue-900">Jalons définis: {steps.length}</span>
+                      </div>
+                      <span className="text-xs text-blue-600">
+                        {steps.filter(s => s.name && s.description).length} jalon(s) valide(s)
+                      </span>
+                    </div>
+                  )}
+                  
                   {steps.map((st, idx) => (
-                    <div key={idx} className="space-y-3 p-4 border rounded-lg">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-sm">Nom du jalon</Label>
-                          <Input
-                            placeholder={`Jalon ${idx + 1}`}
-                            value={st.name}
-                            onChange={(e) =>
-                              setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, name: e.target.value } : s)))
-                            }
-                          />
+                    <Card key={idx} className="border-l-4 border-l-blue-500">
+                      <CardContent className="p-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium text-gray-900">Jalon #{idx + 1}</h4>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSteps((prev) => prev.filter((_, i) => i !== idx))}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Supprimer
+                          </Button>
                         </div>
-                        <div className="space-y-1">
-                          <Label className="text-sm">Description</Label>
-                          <Input
-                            placeholder="Description du jalon"
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Nom du jalon *</Label>
+                            <Input
+                              placeholder={`Ex: Livraison phase ${idx + 1}`}
+                              value={st.name}
+                              onChange={(e) =>
+                                setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, name: e.target.value } : s)))
+                              }
+                              className={!st.name ? "border-red-200 focus:border-red-400" : ""}
+                            />
+                            {!st.name && (
+                              <p className="text-xs text-red-600">Le nom du jalon est requis</p>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Priorité</Label>
+                            <Select defaultValue="Medium">
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Low">🟢 Faible</SelectItem>
+                                <SelectItem value="Medium">🟡 Moyenne</SelectItem>
+                                <SelectItem value="High">🟠 Élevée</SelectItem>
+                                <SelectItem value="Critical">🔴 Critique</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Description / Livrables *</Label>
+                          <Textarea
+                            placeholder="Décrivez les objectifs, livrables et critères d'acceptation de ce jalon..."
                             value={st.description}
                             onChange={(e) =>
                               setSteps((prev) =>
                                 prev.map((s, i) => (i === idx ? { ...s, description: e.target.value } : s)),
                               )
                             }
+                            className={`min-h-[80px] ${!st.description ? "border-red-200 focus:border-red-400" : ""}`}
                           />
+                          {!st.description && (
+                            <p className="text-xs text-red-600">La description du jalon est requise</p>
+                          )}
                         </div>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-sm">Date de début</Label>
-                          <Input
-                            type="date"
-                            value={st.startDate ? toInput(st.startDate) : ""}
-                            onChange={(e) => {
-                              const date = fromInput(e.target.value)
-                              setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, startDate: date } : s)))
-                            }}
-                          />
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              Date de début *
+                            </Label>
+                            <Input
+                              type="date"
+                              value={st.startDate ? toInput(st.startDate) : ""}
+                              onChange={(e) => {
+                                const date = fromInput(e.target.value)
+                                setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, startDate: date } : s)))
+                              }}
+                              min={toInput(formData.timeline[0])}
+                              className={!st.startDate ? "border-red-200 focus:border-red-400" : ""}
+                            />
+                            {!st.startDate && (
+                              <p className="text-xs text-red-600">La date de début est requise</p>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              Date de fin *
+                            </Label>
+                            <Input
+                              type="date"
+                              value={st.endDate ? toInput(st.endDate) : ""}
+                              onChange={(e) => {
+                                const date = fromInput(e.target.value)
+                                setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, endDate: date } : s)))
+                              }}
+                              min={st.startDate ? toInput(st.startDate) : toInput(formData.timeline[0])}
+                              max={toInput(formData.timeline[10])}
+                              className={!st.endDate ? "border-red-200 focus:border-red-400" : ""}
+                            />
+                            {!st.endDate && (
+                              <p className="text-xs text-red-600">La date de fin est requise</p>
+                            )}
+                            {formData.timeline[10] && (
+                              <p className="text-xs text-gray-500">
+                                Date limite: {toInput(formData.timeline[10])}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <div className="space-y-1">
-                          <Label className="text-sm">Date de fin</Label>
-                          <Input
-                            type="date"
-                            value={st.endDate ? toInput(st.endDate) : ""}
-                            onChange={(e) => {
-                              const date = fromInput(e.target.value)
-                              setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, endDate: date } : s)))
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <div className="flex justify-end">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSteps((prev) => prev.filter((_, i) => i !== idx))}
-                        >
-                          Retirer
-                        </Button>
-                      </div>
-                    </div>
+                        
+                        {st.startDate && st.endDate && (
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center gap-2 text-sm text-gray-700">
+                              <Clock className="h-4 w-4" />
+                              <span>Durée estimée: {Math.ceil((st.endDate.getTime() - st.startDate.getTime()) / (1000 * 60 * 60 * 24))} jours</span>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
                   ))}
-                  <div className="flex gap-2">
+                  
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <Button
                       type="button"
-                      size="sm"
+                      variant="outline"
                       onClick={() =>
                         setSteps((prev) => [
                           ...prev,
                           { name: "", description: "", startDate: undefined, endDate: undefined },
                         ])
                       }
+                      className="flex items-center justify-center gap-2"
                     >
                       <Plus className="h-4 w-4" />
                       Ajouter un jalon
                     </Button>
+                    
+                    {steps.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const projectStart = formData.timeline[0]
+                          const projectEnd = formData.timeline[10]
+                          if (!projectStart || !projectEnd) {
+                            alert("Veuillez d'abord définir les dates de début et fin du projet")
+                            return
+                          }
+                          
+                          // Auto-generate dates for jalons
+                          const duration = projectEnd.getTime() - projectStart.getTime()
+                          const stepDuration = duration / steps.length
+                          
+                          setSteps((prev) => prev.map((step, idx) => ({
+                            ...step,
+                            startDate: step.startDate || new Date(projectStart.getTime() + (stepDuration * idx)),
+                            endDate: step.endDate || new Date(projectStart.getTime() + (stepDuration * (idx + 1)))
+                          })))
+                        }}
+                        className="flex items-center justify-center gap-2"
+                      >
+                        <Calendar className="h-4 w-4" />
+                        Générer les dates automatiquement
+                      </Button>
+                    )}
                   </div>
+                  
+                  {steps.length === 0 && (
+                    <div className="text-center p-8 border-2 border-dashed border-gray-200 rounded-lg">
+                      <Calendar className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun jalon défini</h3>
+                      <p className="text-gray-500 mb-4">
+                        Les jalons vous aident à suivre l'avancement de votre projet et à respecter les échéances importantes.
+                      </p>
+                      <Button
+                        type="button"
+                        onClick={() =>
+                          setSteps([{ name: "", description: "", startDate: undefined, endDate: undefined }])
+                        }
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Créer le premier jalon
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
