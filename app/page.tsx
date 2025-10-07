@@ -274,19 +274,17 @@ export default function Dashboard() {
               En tant que directeur, vous pouvez créer de nouveaux départements et assigner des managers.
             </p>
             <div className="flex flex-wrap gap-3">
-              <CreateDepartmentForm onCreated={() => console.log('Department created')}>
-                <Button variant="outline" className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4" />
-                  Nouveau Département
-                </Button>
-              </CreateDepartmentForm>
-              <CreateManagerForm onCreated={() => console.log('Manager created')}>
-                <Button variant="outline" className="flex items-center gap-2">
-                  <UserPlus className="h-4 w-4" />
-                  Nouveau Manager
-                </Button>
-              </CreateManagerForm>
-              <Button variant="outline" asChild>
+              <CreateDepartmentForm onCreated={() => console.log('Department created')} />
+              <Button className="flex items-center gap-2" onClick={() => {/* trigger department form open logic here */}}>
+                <Building2 className="h-4 w-4" />
+                Nouveau Département
+              </Button>
+              <CreateManagerForm onCreated={() => console.log('Manager created')} />
+              <Button className="flex items-center gap-2" onClick={() => {/* trigger manager form open logic here */}}>
+                <UserPlus className="h-4 w-4" />
+                Nouveau Manager
+              </Button>
+              <Button  asChild>
                 <Link href="/admin" className="flex items-center gap-2">
                   <Settings className="h-4 w-4" />
                   Administration Complète

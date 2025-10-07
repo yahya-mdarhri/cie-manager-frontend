@@ -7,6 +7,7 @@ import { Home, FolderOpen, Receipt, TrendingUp, Menu, X, Settings } from "lucide
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
+import Image from "next/image"
 
 const baseNavigation = [
   { name: "Accueil", href: "/", icon: Home },
@@ -112,12 +113,15 @@ export function Navigation() {
         <div className="flex h-full flex-col z-20">
           <div className="p-6">
             <div className="flex items-center gap-2 mb-8">
-              <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-sm">CIE</span>
-              </div>
+             
               <div>
-                <h2 className="font-semibold text-sidebar-foreground">Business Manager</h2>
-                <p className="text-xs text-muted-foreground">Innovation Center</p>
+                <Image
+                  src="/uir.png"
+                  alt="Logo"
+                  width={300}
+                  height={30}
+                  className="object-contain"
+                />
               </div>
             </div>
 

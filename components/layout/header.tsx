@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 import { ProfileDialog } from "@/components/ui/profile-dialog"
 import { SettingsDialog } from "@/components/ui/settings-dialog"
+import Image from "next/image"
 
 export function Header() {
   const { user, logout } = useAuth()
@@ -37,12 +38,14 @@ export function Header() {
           {/* Left side logo */}
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <Building2 className="h-8 w-8 text-primary" />
               <div>
-                <h1 className="text-lg font-semibold text-primary">CIE</h1>
-                <p className="text-xs text-muted-foreground">
-                  Center for Innovation and Entrepreneurship
-                </p>
+                <Image
+                  src="/logo.png"
+                  alt="Logo"
+                  width={250}
+                  height={20}
+                  className="object-contain"
+                />
               </div>
             </div>
           </div>
