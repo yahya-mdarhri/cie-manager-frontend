@@ -9,6 +9,7 @@ import { Pagination } from "@/components/ui/pagination"
 import { Plus, Building2, UserPlus, Users, Building, Settings, Edit, Trash2 } from "lucide-react"
 import CreateDepartmentForm from "@/components/forms/create-department-form"
 import CreateManagerForm from "@/components/forms/create-manager-form"
+import EditUserForm from "@/components/forms/edit-user-form"
 import { useAuth } from "@/lib/auth-context"
 import { usePagination } from "@/hooks/use-pagination"
 import { http } from "@/lib/http"
@@ -162,6 +163,31 @@ export default function AdminPage() {
     }
   }
 
+  const handleDeleteUser = async (userId: number) => {
+    if (!confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible.")) {
+      return
+    }
+
+    try {
+      // Try management endpoint first, fallback to accounts endpoint
+      try {
+        await http.delete(`/api/management/users/${userId}/`)
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          console.log("Management endpoint not found, trying accounts endpoint...")
+          await http.delete(`/api/accounts/users/${userId}/`)
+        } else {
+          throw error
+        }
+      }
+      await loadUsers()
+      alert("Utilisateur supprimé avec succès")
+    } catch (error) {
+      console.error("Error deleting user:", error)
+      alert("Erreur lors de la suppression de l'utilisateur")
+    }
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("fr-FR")
   }
@@ -208,13 +234,18 @@ export default function AdminPage() {
     created_at: formatDate(user.created_at),
     actions: (
       <div className="flex items-center justify-center gap-1">
-        <Button size="sm" variant="ghost">
-          <Edit className="h-4 w-4" />
-        </Button>
+        <EditUserForm 
+          user={user}
+          onUpdated={() => {
+            loadUsers()
+            loadDepartments()
+          }}
+        />
         <Button 
           size="sm" 
           variant="ghost"
           className="text-red-600 hover:text-red-700"
+          onClick={() => handleDeleteUser(user.id)}
         >
           <Trash2 className="h-4 w-4" />
         </Button>
@@ -243,21 +274,27 @@ export default function AdminPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <CreateDepartmentForm onCreated={loadDepartments}>
-            <Button className="flex items-center gap-2">
-              <Building2 className="h-4 w-4" />
-              Nouveau Département
-            </Button>
-          </CreateDepartmentForm>
-          <CreateManagerForm onCreated={() => {
-            loadDepartments()
-            loadUsers()
-          }}>
-            <Button className="flex items-center gap-2">
-              <UserPlus className="h-4 w-4" />
-              Nouveau Manager
-            </Button>
-          </CreateManagerForm>
+          <CreateDepartmentForm 
+            onCreated={loadDepartments}
+            trigger={
+              <Button className="flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                Nouveau Département
+              </Button>
+            }
+          />
+          <CreateManagerForm 
+            onCreated={() => {
+              loadDepartments()
+              loadUsers()
+            }}
+            trigger={
+              <Button className="flex items-center gap-2">
+                <UserPlus className="h-4 w-4" />
+                Nouveau Manager
+              </Button>
+            }
+          />
         </div>
       </div>
 

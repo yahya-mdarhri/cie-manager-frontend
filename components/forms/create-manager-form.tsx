@@ -71,11 +71,10 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // Validation
-    if (!formData.first_name.trim() || !formData.last_name.trim() || !formData.email.trim() || 
-        !formData.username.trim() || !formData.password || !formData.departmentId) {
-      alert("Tous les champs marqués * sont requis")
+    if (!formData.first_name || !formData.last_name || !formData.username || !formData.email || !formData.password || !formData.departmentId) {
+      alert("Veuillez remplir tous les champs obligatoires")
       return
     }
 
@@ -89,25 +88,38 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
       return
     }
 
-    setLoading(true)
     try {
-      // Step 1: Create the user
+      // Log the payload to verify password inclusion
       const userData = {
         first_name: formData.first_name,
         last_name: formData.last_name,
         username: formData.username,
         email: formData.email,
-        password: formData.password
+        password: formData.password,
       }
-      
-      const userResponse = await http.post('/api/accounts/users/create/', userData)
-      const userId = userResponse.data.id
+
+      console.log("[v0] Submitting user data:", { ...userData, password: "***" })
+
+      // Step 1: Create the user
+      const response = await fetch("/api/management/users/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userData),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to create user")
+      }
+
+      const { id: userId } = await response.json()
 
       // Step 2: Assign the user as department manager
-      await http.put(`/api/management/departments/${formData.departmentId}/set-manager/`, {
-        manager: userId
+      await fetch(`/api/management/departments/${formData.departmentId}/set-manager/`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ manager: userId }),
       })
-      
+
       // Reset form
       setFormData({
         first_name: "",
@@ -116,20 +128,19 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
         email: "",
         password: "",
         confirmPassword: "",
-        departmentId: ""
+        departmentId: "",
       })
-      setOpen(false)
-      onCreated?.()
+
       alert("Manager créé et assigné avec succès")
     } catch (error: any) {
-      console.error('Error creating manager:', error)
-      const errorMessage = error.response?.data?.email?.[0] || 
-                           error.response?.data?.username?.[0] ||
-                           error.response?.data?.details || 
-                           "Erreur lors de la création du manager"
+      console.error("[v0] Error creating manager:", error)
+      const errorMessage =
+        error.response?.data?.password?.[0] ||
+        error.response?.data?.email?.[0] ||
+        error.response?.data?.detail ||
+        error.message ||
+        "Erreur lors de la création du manager"
       alert(errorMessage)
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -317,7 +328,7 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
           </Card>
 
           <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={handleCancel} disabled={loading}>
+            <Button type="button"  onClick={handleCancel} disabled={loading}>
               Annuler
             </Button>
             <Button type="submit" disabled={loading || departments.length === 0}>
