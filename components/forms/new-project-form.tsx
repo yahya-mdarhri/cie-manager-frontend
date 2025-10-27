@@ -204,7 +204,15 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
       fd.append("needs_expression_date", needsExprStr)
       fd.append("client_po_date", clientPoStr)
       fd.append("end_date", endDateStr)
-      fd.append("total_budget", String(Number(formData.totalBudget || 0)))
+  fd.append("total_budget", String(Number(formData.totalBudget || 0)))
+  // Map budget breakdown to backend field names
+  fd.append("personnel_budget", String(Number(formData.budgetBreakdown.personnel || 0)))
+  fd.append("equipment_budget", String(Number(formData.budgetBreakdown.equipment || 0)))
+  fd.append("subcontracting_budget", String(Number(formData.budgetBreakdown.subcontracting || 0)))
+  // "material" maps to mobility_budget in the backend
+  fd.append("mobility_budget", String(Number(formData.budgetBreakdown.material || 0)))
+  fd.append("consumables_budget", String(Number(formData.budgetBreakdown.consumables || 0)))
+  fd.append("other_budget", String(Number(formData.budgetBreakdown.other || 0)))
       fd.append("client_name", formData.client)
       fd.append("description", formData.description)
       fd.append("objective", formData.objective)
@@ -225,12 +233,13 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
         const s = toDate(d)
         if (s) fd.append(field, s)
       })
-      if (!formData.contractFile) throw new Error("Le document contractuel est requis")
-      fd.append("contract_documents", formData.contractFile)
+      // contract_documents is optional on the backend; append only if present
+      if (formData.contractFile) {
+        fd.append("contract_documents", formData.contractFile)
+      }
 
-      await http.post(`/api/management/departments/${departmentId}/projects/create/`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      })
+      // Don't set Content-Type manually for FormData — let the browser set the boundary
+      await http.post(`/api/management/departments/${departmentId}/projects/create/`, fd)
       // Try to locate created project id via project_code
       let createdProjectId: number | null = null
       try {
@@ -253,13 +262,12 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
             : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
           fdStep.append("start_date", startDate)
           fdStep.append("end_date", endDate)
-          try {
-            await http.post(`/api/management/departments/${departmentId}/projects/${createdProjectId}/steps/create/`, fdStep, {
-              headers: { "Content-Type": "multipart/form-data" },
-            })
-          } catch (stepErr) {
-            console.warn("Failed to create step:", stepErr)
-          }
+            try {
+              // allow browser to set Content-Type for FormData
+              await http.post(`/api/management/departments/${departmentId}/projects/${createdProjectId}/steps/create/`, fdStep)
+            } catch (stepErr) {
+              console.warn("Failed to create step:", stepErr)
+            }
         }
       }
 

@@ -88,6 +88,7 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
       return
     }
 
+    setLoading(true)
     try {
       // Log the payload to verify password inclusion
       const userData = {
@@ -98,27 +99,17 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
         password: formData.password,
       }
 
-      console.log("[v0] Submitting user data:", { ...userData, password: "***" })
 
-      // Step 1: Create the user
-      const response = await fetch("/api/management/users/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(userData),
-      })
+      // Step 1: Create the user (use axios instance so cookies/CSRF are included)
+      const createResp = await http.post(`/api/management/users/`, userData)
+      const userId = createResp.data?.id
 
-      if (!response.ok) {
-        throw new Error("Failed to create user")
+      if (!userId) {
+        throw new Error('User creation returned unexpected response')
       }
 
-      const { id: userId } = await response.json()
-
       // Step 2: Assign the user as department manager
-      await fetch(`/api/management/departments/${formData.departmentId}/set-manager/`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ manager: userId }),
-      })
+      await http.put(`/api/management/departments/${formData.departmentId}/set-manager/`, { manager: userId })
 
       // Reset form
       setFormData({
@@ -132,6 +123,8 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
       })
 
       alert("Manager créé et assigné avec succès")
+      // Optionally close dialog
+      setOpen(false)
     } catch (error: any) {
       console.error("[v0] Error creating manager:", error)
       const errorMessage =
@@ -141,6 +134,8 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
         error.message ||
         "Erreur lors de la création du manager"
       alert(errorMessage)
+    } finally {
+      setLoading(false)
     }
   }
 

@@ -84,8 +84,14 @@ async function fetchProjectsForUser(
   }
 
   if (user.role === "department_manager" && user.department) {
+    const depId =
+      typeof user.department === "object"
+        ? String((user.department as any)?.id ?? (user.department as any)?.pk ?? "")
+        : String(user.department ?? "")
+    if (!depId) return { projects: [], pagination: {} }
+
     const { data: raw } = await http.get(
-      `${base}/departments/${user.department}/projects/`,
+      `${base}/departments/${depId}/projects/`,
       { params: { page, size: pageSize } },
     );
     // Handle paginated response
@@ -100,6 +106,9 @@ async function fetchProjectsForUser(
 }
 
 const initialProjectData: any[] = [];
+
+// base API path used throughout this component
+const base = "/api/management";
 
 export default function ProjectsPage() {
   const { user } = useAuth();
@@ -274,11 +283,11 @@ export default function ProjectsPage() {
               Nouveau Projet
             </Button>
           </NewProjectForm>
-          <Button className="flex items-center gap-2 bg-transparent" onClick={handleExportCSV}>
+          <Button variant="ghost" className="flex items-center gap-2" onClick={handleExportCSV}>
             <Download className="h-4 w-4" />
             Exporter CSV
           </Button>
-          <Button className="flex items-center gap-2 bg-transparent">
+          <Button variant="ghost" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
             Paramètres
           </Button>
@@ -300,21 +309,23 @@ export default function ProjectsPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <Select
-              value={selectedDepartment}
-              onValueChange={setSelectedDepartment}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Tous les départements" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les départements</SelectItem>
-                <SelectItem value="tto">TTO</SelectItem>
-                <SelectItem value="clinique">Clinique Industrielle</SelectItem>
-                <SelectItem value="tech">Tech Center</SelectItem>
-                <SelectItem value="cie">CIE Direct</SelectItem>
-              </SelectContent>
-            </Select>
+            {user?.role !== "department_manager" && (
+              <Select
+                value={selectedDepartment}
+                onValueChange={setSelectedDepartment}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Tous les départements" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les départements</SelectItem>
+                  <SelectItem value="tto">TTO</SelectItem>
+                  <SelectItem value="clinique">Clinique Industrielle</SelectItem>
+                  <SelectItem value="tech">Tech Center</SelectItem>
+                  <SelectItem value="cie">CIE Direct</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             <Select value={selectedStatus} onValueChange={setSelectedStatus}>
               <SelectTrigger>
                 <SelectValue placeholder="Tous les statuts" />
@@ -336,6 +347,7 @@ export default function ProjectsPage() {
         columns={columns}
         data={dataWithActions}
         loading={loading}
+        tableId="projects"
       />
 
       {/* Pagination */}

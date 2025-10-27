@@ -130,7 +130,12 @@ async function fetchExpensesForUser(
 
   // For department managers, fetch from their department's projects
   if (user.role === "department_manager" && user.department) {
-    const depId = Number(user.department);
+    const depId =
+      typeof user.department === "object"
+        ? String((user.department as any)?.id ?? (user.department as any)?.pk ?? "")
+        : String(user.department ?? "");
+
+    if (!depId) return { records: [], pagination: {} };
 
     // First get all projects for the department
     const { data: projectsRaw } = await http.get(`${base}/departments/${depId}/projects/`, { params: { page: 1, size: 100 } });
@@ -348,8 +353,9 @@ export default function ExpensesPage() {
         </p>
       </div>
 
+      {/* Hide department filter for department managers (they only see their own dept) */}
       <FilterBar
-        fields={filterFields}
+        fields={user?.role === "department_manager" ? filterFields.filter(f => f.key !== "department") : filterFields}
         onFilter={handleFilter}
         onReset={handleReset}
         initialFilters={filters}
@@ -361,6 +367,7 @@ export default function ExpensesPage() {
         data={rows}
         summary={summary}
         loading={loading}
+        tableId="expenses"
       />
 
       {/* Pagination */}

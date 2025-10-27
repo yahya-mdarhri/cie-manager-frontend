@@ -46,6 +46,7 @@ interface Project {
   budgetVentilation?: { label: string; amount: number; color?: string | null }[]
   timeline?: { step: string; date?: string; completed?: boolean }[]
   departmentId?: number
+  description?: string
 }
 
 interface ProjectStep {
@@ -69,6 +70,9 @@ interface Transaction {
   amount: number
   type: "encaissement" | "depense"
   category?: string
+  supplier?: string
+  invoice_reference?: string
+  document_path?: string | null
 }
 
 interface Document {
@@ -91,49 +95,23 @@ export default function ProjectViewModal({
   const [loadingSteps, setLoadingSteps] = useState(false)
   const [activeTab, setActiveTab] = useState<ActiveTab>("details")
   const [editedProject, setEditedProject] = useState<Project>(project)
-  const [transactions, setTransactions] = useState<Transaction[]>([
-    {
-      id: 1,
-      date: "2024-01-15",
-      description: "Paiement initial client",
-      amount: 50000,
-      type: "encaissement",
-      category: "Paiement client",
-    },
-    {
-      id: 2,
-      date: "2024-02-01",
-      description: "Achat licences logiciels",
-      amount: 15000,
-      type: "depense",
-      category: "Logiciels",
-    },
-    {
-      id: 3,
-      date: "2024-02-15",
-      description: "Paiement milestone 1",
-      amount: 25000,
-      type: "encaissement",
-      category: "Paiement client",
-    },
-    {
-      id: 4,
-      date: "2024-03-01",
-      description: "Frais développement",
-      amount: 35000,
-      type: "depense",
-      category: "Développement",
-    },
-  ])
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [loadingExpenses, setLoadingExpenses] = useState(false)
   const [documents, setDocuments] = useState<Document[]>([
     { id: 1, name: "Cahier des charges.pdf", type: "PDF", size: "2.5 MB", uploadDate: "2024-01-10" },
     { id: 2, name: "Maquettes UI.figma", type: "Figma", size: "15.2 MB", uploadDate: "2024-01-20" },
     { id: 3, name: "Contrat client.pdf", type: "PDF", size: "1.8 MB", uploadDate: "2024-01-05" },
   ])
-  const [newTransaction, setNewTransaction] = useState({
+  const [loadingDocuments, setLoadingDocuments] = useState(false)
+  const [newTransaction, setNewTransaction] = useState<{
+    description: string
+    amount: string
+    type: "encaissement" | "depense"
+    category: string
+  }>({
     description: "",
     amount: "",
-    type: "encaissement" as const,
+    type: "encaissement",
     category: "",
   })
 
@@ -154,6 +132,94 @@ export default function ProjectViewModal({
     }
 
     fetchProjectSteps()
+  }, [project.id, project.departmentId])
+
+  // Fetch project details to load contract_documents and related documents
+  useEffect(() => {
+    const fetchProjectDetails = async () => {
+      if (!project.id || !project.departmentId) return
+      setLoadingDocuments(true)
+      try {
+        const { data } = await http.get(`/api/management/departments/${project.departmentId}/projects/${project.id}/`)
+        const docs: Document[] = []
+        // contract_documents may be a URL string
+        if (data?.contract_documents) {
+          docs.push({
+            id: -1,
+            name: data.contract_documents.split("/").pop() || "contract",
+            type: (data.contract_documents.split(".").pop() || "pdf").toUpperCase(),
+            size: "-",
+            uploadDate: "-",
+            url: data.contract_documents,
+          })
+        }
+        // include project steps' execution_proof (if available)
+        try {
+          const { data: stepsRaw } = await http.get(
+            `/api/management/departments/${project.departmentId}/projects/${project.id}/steps/`,
+          )
+          const steps = stepsRaw?.results || stepsRaw || []
+          if (Array.isArray(steps)) {
+            for (const s of steps) {
+              if (s.execution_proof) {
+                docs.push({
+                  id: s.id,
+                  name: s.execution_proof.split("/").pop() || `jalon-${s.id}`,
+                  type: (s.execution_proof.split(".").pop() || "pdf").toUpperCase(),
+                  size: "-",
+                  uploadDate: s.created_at ? s.created_at.split("T")[0] : "-",
+                  url: s.execution_proof,
+                })
+              }
+            }
+          }
+        } catch (e) {
+          // ignore steps fetch errors here
+        }
+
+        setDocuments(docs)
+      } catch (err) {
+        console.error("Error fetching project details/documents:", err)
+      } finally {
+        setLoadingDocuments(false)
+      }
+    }
+
+    fetchProjectDetails()
+  }, [project.id, project.departmentId])
+
+  // Fetch project expenses from backend
+  useEffect(() => {
+    const refreshExpenses = async () => {
+      if (!project.id || !project.departmentId) return
+      setLoadingExpenses(true)
+      try {
+        const { data: raw } = await http.get(
+          `/api/management/departments/${project.departmentId}/projects/${project.id}/expenses/`,
+        )
+        const list = raw?.results || raw || []
+        const mapped: Transaction[] = (Array.isArray(list) ? list : [])
+          .map((e: any) => ({
+            id: e.id,
+            date: e.expense_date,
+            description: e.description || e.invoice_reference || "",
+            amount: Number(e.amount || 0),
+            type: "depense",
+            category: e.category || "",
+            supplier: (e as any).supplier || "",
+            invoice_reference: (e as any).invoice_reference || "",
+            // allow optional document link
+            document_path: (e as any).document_path || null,
+          }))
+        setTransactions(mapped)
+      } catch (err) {
+        console.error("Error fetching project expenses:", err)
+      } finally {
+        setLoadingExpenses(false)
+      }
+    }
+
+    refreshExpenses()
   }, [project.id, project.departmentId])
 
   const formatCurrency = (amount: string | number) => {
@@ -251,7 +317,51 @@ export default function ProjectViewModal({
   }
 
   const handleAddTransaction = () => {
-    if (newTransaction.description && newTransaction.amount) {
+    if (!newTransaction.description || !newTransaction.amount) return
+
+    // Currently we only POST expenses (depense) to the backend endpoint
+    if (newTransaction.type === "depense") {
+      (async () => {
+        try {
+          if (!project.id || !project.departmentId) throw new Error("Project context missing")
+          const payload = {
+            description: newTransaction.description,
+            amount: Number.parseFloat(newTransaction.amount),
+            expense_date: new Date().toISOString().split("T")[0],
+            category: newTransaction.category || "Autre",
+            supplier: "",
+            invoice_reference: "",
+          }
+          await http.post(
+            `/api/management/departments/${project.departmentId}/projects/${project.id}/expenses/`,
+            payload,
+          )
+          // refresh list
+          const { data: raw } = await http.get(
+            `/api/management/departments/${project.departmentId}/projects/${project.id}/expenses/`,
+          )
+          const list = raw?.results || raw || []
+          const mapped: Transaction[] = (Array.isArray(list) ? list : [])
+            .map((e: any) => ({
+              id: e.id,
+              date: e.expense_date,
+              description: e.description || e.invoice_reference || "",
+              amount: Number(e.amount || 0),
+              type: "depense",
+              category: e.category || "",
+              supplier: (e as any).supplier || "",
+              invoice_reference: (e as any).invoice_reference || "",
+              document_path: (e as any).document_path || null,
+            }))
+          setTransactions(mapped)
+          setNewTransaction({ description: "", amount: "", type: "encaissement", category: "" })
+        } catch (err) {
+          console.error("Failed to create expense:", err)
+          alert("Échec de la création de la dépense")
+        }
+      })()
+    } else {
+      // encaissements are not handled here yet; fallback to local add for now
       const transaction: Transaction = {
         id: Date.now(),
         date: new Date().toISOString().split("T")[0],
@@ -262,27 +372,104 @@ export default function ProjectViewModal({
       }
       setTransactions([...transactions, transaction])
       setNewTransaction({ description: "", amount: "", type: "encaissement", category: "" })
-      console.log("[v0] Added new transaction:", transaction)
     }
   }
 
   const handleDeleteTransaction = (id: number) => {
-    setTransactions(transactions.filter((t) => t.id !== id))
-    console.log("[v0] Deleted transaction:", id)
+    ;(async () => {
+      try {
+        if (!project.id || !project.departmentId) throw new Error("Project context missing")
+        await http.delete(
+          `/api/management/departments/${project.departmentId}/projects/${project.id}/expenses/${id}/`,
+        )
+        // refresh
+        const { data: raw } = await http.get(
+          `/api/management/departments/${project.departmentId}/projects/${project.id}/expenses/`,
+        )
+        const list = raw?.results || raw || []
+        const mapped: Transaction[] = (Array.isArray(list) ? list : [])
+          .map((e: any) => ({
+            id: e.id,
+            date: e.expense_date,
+            description: e.description || e.invoice_reference || "",
+            amount: Number(e.amount || 0),
+            type: "depense",
+            category: e.category || "",
+            supplier: (e as any).supplier || "",
+            invoice_reference: (e as any).invoice_reference || "",
+            document_path: (e as any).document_path || null,
+          }))
+        setTransactions(mapped)
+      } catch (err) {
+        console.error("Failed to delete expense:", err)
+        alert("Échec lors de la suppression de la dépense")
+      }
+    })()
   }
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
-      const newDoc: Document = {
-        id: Date.now(),
-        name: file.name,
-        type: file.type.split("/")[1].toUpperCase(),
-        size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
-        uploadDate: new Date().toISOString().split("T")[0],
+      // upload contract document to project via PATCH
+      ;(async () => {
+        try {
+          if (!project.id || !project.departmentId) throw new Error("Project context missing")
+          const fd = new FormData()
+          fd.append("contract_documents", file)
+          // let axios/browser set Content-Type
+          await http.patch(
+            `/api/management/departments/${project.departmentId}/projects/${project.id}/`,
+            fd,
+          )
+          // refresh documents
+          const { data } = await http.get(`/api/management/departments/${project.departmentId}/projects/${project.id}/`)
+          const docs: Document[] = []
+          if (data?.contract_documents) {
+            docs.push({
+              id: -1,
+              name: data.contract_documents.split("/").pop() || "contract",
+              type: (data.contract_documents.split(".").pop() || "pdf").toUpperCase(),
+              size: "-",
+              uploadDate: "-",
+              url: data.contract_documents,
+            })
+          }
+          setDocuments(docs)
+        } catch (err) {
+          console.error("Failed to upload document:", err)
+          alert("Échec du téléchargement du document")
+        }
+      })()
+    }
+  }
+
+  const handleDeleteDocument = async (doc: Document) => {
+    if (!project.id || !project.departmentId) return
+    // If it's the contract document (id === -1), clear it via PATCH
+    try {
+      if (doc.id === -1) {
+        // send FormData with empty value to clear the file
+        const fd = new FormData()
+        // Some DRF setups accept an empty string to clear file fields
+        fd.append("contract_documents", "")
+        await http.patch(
+          `/api/management/departments/${project.departmentId}/projects/${project.id}/`,
+          fd,
+        )
+        setDocuments((prev) => prev.filter((d) => d.id !== doc.id))
+        return
       }
-      setDocuments([...documents, newDoc])
-      console.log("[v0] Uploaded document:", newDoc)
+
+      // Otherwise, it may be a step proof; delete the step resource's file by PATCH-ing the step
+      // Attempt to clear the step's execution_proof
+      await http.patch(
+        `/api/management/departments/${project.departmentId}/projects/${project.id}/steps/${doc.id}/`,
+        { execution_proof: null },
+      )
+      setDocuments((prev) => prev.filter((d) => d.id !== doc.id))
+    } catch (err) {
+      console.error("Failed to delete document:", err)
+      alert("Échec lors de la suppression du document")
     }
   }
 
@@ -489,22 +676,41 @@ export default function ProjectViewModal({
             </div>
 
             <div className="space-y-3">
-              {depenses.map((transaction) => (
-                <div key={transaction.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div>
-                    <p className="font-medium">{transaction.description}</p>
-                    <p className="text-sm text-gray-600">
-                      {transaction.date} • {transaction.category}
-                    </p>
+              {loadingExpenses ? (
+                <p className="text-gray-600">Chargement des dépenses...</p>
+              ) : depenses.length === 0 ? (
+                <p className="text-gray-600">Aucune dépense enregistrée pour ce projet.</p>
+              ) : (
+                depenses.map((transaction) => (
+                  <div key={transaction.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div>
+                      <p className="font-medium">{transaction.description || "-"}</p>
+                      <p className="text-sm text-gray-600">
+                        {transaction.date} • {transaction.category || "-"}
+                      </p>
+                      {transaction.supplier && (
+                        <p className="text-xs text-gray-500">Fournisseur: {transaction.supplier}</p>
+                      )}
+                      {transaction.invoice_reference && (
+                        <p className="text-xs text-gray-500">Réf. facture: {transaction.invoice_reference}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right mr-2">
+                        <div className="font-semibold text-red-600">-{formatCurrency(transaction.amount)}</div>
+                      </div>
+                      {transaction.document_path ? (
+                        <Button size="sm" className="mr-2" onClick={() => window.open(transaction.document_path || "", "_blank") }>
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                      ) : null}
+                      <Button size="sm" onClick={() => handleDeleteTransaction(transaction.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-semibold text-red-600">-{formatCurrency(transaction.amount)}</span>
-                    <Button size="sm"  onClick={() => handleDeleteTransaction(transaction.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </Card>
         )
@@ -524,28 +730,39 @@ export default function ProjectViewModal({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {documents.map((doc) => (
-                <div key={doc.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between mb-2">
-                    <FileText className="h-8 w-8 text-blue-500" />
-                    <Badge variant="secondary">{doc.type}</Badge>
+              {loadingDocuments ? (
+                <p className="text-gray-600 col-span-3">Chargement des documents...</p>
+              ) : documents.length === 0 ? (
+                <p className="text-gray-600 col-span-3">Aucun document disponible pour ce projet.</p>
+              ) : (
+                documents.map((doc) => (
+                  <div key={doc.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between mb-2">
+                      <FileText className="h-8 w-8 text-blue-500" />
+                      <Badge variant="secondary">{doc.type}</Badge>
+                    </div>
+                    <h4 className="font-medium text-sm mb-1 truncate">{doc.name}</h4>
+                    <p className="text-xs text-gray-600 mb-2">{doc.size}</p>
+                    <p className="text-xs text-gray-500 mb-3">{doc.uploadDate ? `Ajouté le ${new Date(doc.uploadDate).toLocaleDateString("fr-FR")}` : ""}</p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        className="flex-1 bg-transparent"
+                        onClick={() => doc.url && window.open(doc.url, "_blank")}
+                      >
+                        <Eye className="h-3 w-3 mr-1" />
+                        Voir
+                      </Button>
+                      <Button size="sm" onClick={() => doc.url && window.open(doc.url, "_blank") }>
+                        <Download className="h-3 w-3" />
+                      </Button>
+                      <Button size="sm" className="text-red-600" onClick={() => handleDeleteDocument(doc)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
-                  <h4 className="font-medium text-sm mb-1 truncate">{doc.name}</h4>
-                  <p className="text-xs text-gray-600 mb-2">{doc.size}</p>
-                  <p className="text-xs text-gray-500 mb-3">
-                    Ajouté le {new Date(doc.uploadDate).toLocaleDateString("fr-FR")}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button size="sm"  className="flex-1 bg-transparent">
-                      <Eye className="h-3 w-3 mr-1" />
-                      Voir
-                    </Button>
-                    <Button size="sm" >
-                      <Download className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </Card>
         )

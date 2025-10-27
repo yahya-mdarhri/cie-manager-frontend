@@ -42,9 +42,17 @@ export default function Dashboard() {
           const { data: raw } = await http.get(`${base}/all/projects/`, { params: { page: 1, size: 1000 } })
           projects = (raw?.results || raw) ?? []
         } else if (user.role === "department_manager" && user.department) {
-          // Fetch projects for the manager's department
-          const { data: raw } = await http.get(`${base}/departments/${user.department}/projects/`, { params: { page: 1, size: 1000 } })
-          projects = (raw?.results || raw) ?? []
+          // Fetch projects for the manager's department (normalize department id if it's an object)
+          const depId =
+            typeof user.department === "object"
+              ? String((user.department as any)?.id ?? (user.department as any)?.pk ?? "")
+              : String(user.department ?? "")
+          if (depId) {
+            const { data: raw } = await http.get(`${base}/departments/${depId}/projects/`, { params: { page: 1, size: 1000 } })
+            projects = (raw?.results || raw) ?? []
+          } else {
+            projects = []
+          }
         }
       } catch (e) {
         // If unauthorized or network issues, leave projects empty; interceptor will redirect on 401

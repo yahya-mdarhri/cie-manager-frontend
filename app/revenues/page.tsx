@@ -97,8 +97,13 @@ async function fetchRevenuesForUser(
 
   // For department managers, fetch from their department's projects
   if (user.role === "department_manager" && user.department) {
-    const depId = Number(user.department)
-    
+    const depId =
+      typeof user.department === "object"
+        ? String((user.department as any)?.id ?? (user.department as any)?.pk ?? "")
+        : String(user.department ?? "")
+
+    if (!depId) return { rows: [], pagination: {} }
+
     // First get all projects for the department
     const { data: projectsRaw } = await http.get(`${base}/departments/${depId}/projects/`, { params: { page: 1, size: 100 } })
     const projects = projectsRaw.results || projectsRaw
@@ -254,9 +259,14 @@ export default function RevenuesPage() {
         <p className="text-muted-foreground">Suivi et analyse des revenus par projet</p>
       </div>
 
-      <FilterBar fields={filterFields} onFilter={handleFilter} onReset={handleReset} />
+      {/* Hide department filter for department managers (they only see their own dept) */}
+      <FilterBar
+        fields={user?.role === "department_manager" ? filterFields.filter(f => f.key !== "department") : filterFields}
+        onFilter={handleFilter}
+        onReset={handleReset}
+      />
 
-      <DataTable title="Liste des Encaissements" columns={columns} data={rows} summary={summary} loading={loading} />
+  <DataTable title="Liste des Encaissements" columns={columns} data={rows} summary={summary} loading={loading} tableId="revenues" />
 
       {/* Pagination */}
       <div className="flex items-center justify-between">

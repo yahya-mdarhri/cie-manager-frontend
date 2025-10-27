@@ -8,6 +8,8 @@ import { DataTable } from "@/components/ui/data-table"
 import { Pagination } from "@/components/ui/pagination"
 import { Plus, Building2, UserPlus, Users, Building, Settings, Edit, Trash2 } from "lucide-react"
 import CreateDepartmentForm from "@/components/forms/create-department-form"
+import EditDepartmentForm from "@/components/forms/edit-department-form"
+import AssignManagersForm from "@/components/forms/assign-managers-form"
 import CreateManagerForm from "@/components/forms/create-manager-form"
 import EditUserForm from "@/components/forms/edit-user-form"
 import { useAuth } from "@/lib/auth-context"
@@ -206,14 +208,29 @@ export default function AdminPage() {
   const departmentData = departments.map((dept) => ({
     ...dept,
     manager: dept.managers && dept.managers.length > 0 
-      ? `${dept.managers[0].first_name} ${dept.managers[0].last_name}`
+      ? dept.managers.map(m => `${m.first_name} ${m.last_name}`).join(", ")
       : <Badge variant="outline">Aucun manager</Badge>,
     created_at: formatDate(dept.created_at),
     actions: (
       <div className="flex items-center justify-center gap-1">
-        <Button size="sm" variant="ghost">
-          <Edit className="h-4 w-4" />
-        </Button>
+        <AssignManagersForm
+          department={dept}
+          onUpdated={loadDepartments}
+          trigger={
+            <Button size="sm" variant="ghost" title="Assigner des managers">
+              <Users className="h-4 w-4" />
+            </Button>
+          }
+        />
+        <EditDepartmentForm
+          department={dept}
+          onUpdated={loadDepartments}
+          trigger={
+            <Button size="sm" variant="ghost">
+              <Edit className="h-4 w-4" />
+            </Button>
+          }
+        />
         <Button 
           size="sm" 
           variant="ghost" 
@@ -374,6 +391,7 @@ export default function AdminPage() {
             columns={departmentColumns}
             data={departmentData}
             loading={loadingDepartments}
+            tableId="admin-departments"
           />
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
@@ -393,6 +411,7 @@ export default function AdminPage() {
             columns={userColumns}
             data={userData}
             loading={loadingUsers}
+            tableId="admin-users"
           />
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
