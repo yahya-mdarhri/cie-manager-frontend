@@ -8,13 +8,17 @@ import { FolderOpen, DollarSign, TrendingUp, TrendingDown, Download, Calendar, S
 import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/lib/auth-context"
+import { useLanguage } from "@/lib/language-context"
 import { http } from "@/lib/http"
 import ExportMenu from "@/components/ui/export-menu"
 import CreateDepartmentForm from "@/components/forms/create-department-form"
 import CreateManagerForm from "@/components/forms/create-manager-form"
+import { useRecentActivity } from "@/hooks/use-recent-activity"
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const { t, language } = useLanguage()
+  const [reloadKey, setReloadKey] = useState(0)
   const [metrics, setMetrics] = useState({
     projects: 0,
     totalBudget: 0,
@@ -22,6 +26,7 @@ export default function Dashboard() {
     remainingBudget: 0,
   })
   const [recent, setRecent] = useState<Array<{ title: string; subtitle: string; color: string }>>([])
+  const { activities, loading: activityLoading, error: activityError, refetch } = useRecentActivity(20)
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({
     "In Progress": 0,
     Paused: 0,
@@ -32,8 +37,9 @@ export default function Dashboard() {
   useEffect(() => {
     const load = async () => {
       if (!user) return
-      const base = "/api/management"
-      const formatMoney = (n: number) => Number(n || 0).toLocaleString("fr-FR", { style: "currency", currency: "MAD" })
+  const base = "/api/management"
+  const locale = language === "fr" ? "fr-FR" : "en-US"
+  const formatMoney = (n: number) => Number(n || 0).toLocaleString(locale, { style: "currency", currency: "MAD" })
 
       let projects: any[] = []
       try {
@@ -79,90 +85,54 @@ export default function Dashboard() {
       })
       setStatusCounts(counts)
 
-      // Recent activity
-      const recentItems: Array<{ title: string; subtitle: string; color: string; date: string }> = []
-      try {
-        if (user.role === "director") {
-          // Use global endpoints for directors
-          const [expRes, payRes] = await Promise.allSettled([
-            http.get(`${base}/all/expenses/`, { params: { page: 1, size: 10 } }),
-            http.get(`${base}/all/payments/`, { params: { page: 1, size: 10 } }),
-          ])
-          if (expRes.status === "fulfilled") {
-            const exps = (expRes.value.data?.results || expRes.value.data) ?? []
-            exps.forEach((e: any) =>
-              recentItems.push({
-                title: "Dépense approuvée",
-                subtitle: `${formatMoney(e.amount)} - ${e.project?.project_name ?? "Projet"}`,
-                color: "blue",
-                date: e.expense_date,
-              })
-            )
-          }
-          if (payRes.status === "fulfilled") {
-            const pays = (payRes.value.data?.results || payRes.value.data) ?? []
-            pays.forEach((pr: any) =>
-              recentItems.push({
-                title: "Encaissement reçu",
-                subtitle: `${formatMoney(pr.amount)} - ${pr.project?.project_name ?? "Projet"}`,
-                color: "green",
-                date: pr.payment_received_date,
-              })
-            )
-          }
-        } else {
-          // For managers, pull from each project (best-effort)
-          for (const p of projects.slice(0, 5)) {
-            const depId = p.department?.id || p.department_id || user.department
-            if (!depId) continue
-            const [expRes, payRes] = await Promise.allSettled([
-              http.get(`${base}/departments/${depId}/projects/${p.id}/expenses/`, { params: { page: 1, size: 5 } }),
-              http.get(`${base}/departments/${depId}/projects/${p.id}/payments/`, { params: { page: 1, size: 5 } }),
-            ])
-            if (expRes.status === "fulfilled") {
-              const raw = expRes.value.data
-              const exps = raw.results || raw
-              exps.forEach((e: any) =>
-                recentItems.push({
-                  title: "Dépense approuvée",
-                  subtitle: `${formatMoney(e.amount)} - ${p.project_name}`,
-                  color: "blue",
-                  date: e.expense_date,
-                })
-              )
-            }
-            if (payRes.status === "fulfilled") {
-              const raw = payRes.value.data
-              const pays = raw.results || raw
-              pays.forEach((pr: any) =>
-                recentItems.push({
-                  title: "Encaissement reçu",
-                  subtitle: `${formatMoney(pr.amount)} - ${p.project_name}`,
-                  color: "green",
-                  date: pr.payment_received_date,
-                })
-              )
-            }
-          }
+      // Recent activity now uses backend activity logs
+      const formatRelative = (ts: string) => {
+        try {
+          const d = new Date(ts)
+          const now = new Date()
+          const diffMs = d.getTime() - now.getTime()
+          const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" })
+          const minutes = Math.round(diffMs / (60 * 1000))
+          const hours = Math.round(diffMs / (60 * 60 * 1000))
+          const days = Math.round(diffMs / (24 * 60 * 60 * 1000))
+          if (Math.abs(minutes) < 1) return rtf.format(0, "minute")
+          if (Math.abs(minutes) < 60) return rtf.format(minutes, "minute")
+          if (Math.abs(hours) < 24) return rtf.format(hours, "hour")
+          return rtf.format(days, "day")
+        } catch {
+          return new Date(ts).toLocaleString(locale)
         }
-      } catch {
-        // ignore
       }
-
-      recentItems.sort((a, b) => (a.date > b.date ? -1 : 1))
-      setRecent(recentItems.slice(0, 6))
+      const colorFor = (ct: string) =>
+        ct === "paymentreceived" ? "green" : ct === "expense" ? "blue" : ct === "projectsteps" ? "purple" : ct === "project" ? "gray" : "blue"
+      const actionKey = (action: string) => {
+        const map: Record<string, string> = { CREATE: "created", UPDATE: "updated", DELETE: "deleted" }
+        return map[action] || action.toLowerCase()
+      }
+      const mapped = (activities || []).map(a => {
+        const ak = actionKey(a.action)
+        return {
+          title: t("dashboard.activityTitlePattern", {
+            action: t(`dashboard.activity.${ak}`),
+            model: t(`dashboard.models.${a.content_type}`)
+          }),
+          subtitle: `${a.object_name} • ${formatRelative(a.timestamp)}`,
+          color: colorFor(a.content_type)
+        }
+      })
+      setRecent(mapped.slice(0, 6))
     }
     load()
-  }, [user])
+  }, [user, reloadKey, language, activities])
 
-  const fmt = (n: number) => Number(n || 0).toLocaleString("fr-FR", { style: "currency", currency: "MAD" })
+  const fmt = (n: number) => Number(n || 0).toLocaleString(language === "fr" ? "fr-FR" : "en-US", { style: "currency", currency: "MAD" })
 
   return (
     <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 md:pl-72 space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Tableau de Bord</h1>
-          <p className="text-muted-foreground">Vue d'ensemble de votre activité</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{t("dashboard.title")}</h1>
+          <p className="text-muted-foreground">{t("dashboard.overview")}</p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           <Select defaultValue="last-month">
@@ -171,9 +141,9 @@ export default function Dashboard() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="last-month">Dernier mois</SelectItem>
-              <SelectItem value="last-quarter">Dernier trimestre</SelectItem>
-              <SelectItem value="last-year">Dernière année</SelectItem>
+              <SelectItem value="last-month">{t("dashboard.filters.lastMonth")}</SelectItem>
+              <SelectItem value="last-quarter">{t("dashboard.filters.lastQuarter")}</SelectItem>
+              <SelectItem value="last-year">{t("dashboard.filters.lastYear")}</SelectItem>
             </SelectContent>
           </Select>
           <div className="w-full sm:w-auto">
@@ -184,21 +154,21 @@ export default function Dashboard() {
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard title="Projets Actifs" value={String(metrics.projects)} icon={FolderOpen} trend={{ value: 0, isPositive: true }} />
+        <MetricCard title={t("dashboard.activeProjects")} value={String(metrics.projects)} icon={FolderOpen} trend={{ value: 0, isPositive: true }} />
         <MetricCard
-          title="Budget Total"
+          title={t("dashboard.totalBudget")}
           value={fmt(metrics.totalBudget)}
           icon={DollarSign}
           trend={{ value: 0, isPositive: true }}
         />
         <MetricCard
-          title="Budget Engagé"
+          title={t("dashboard.budgetEngaged")}
           value={fmt(metrics.committedBudget)}
           icon={TrendingUp}
           trend={{ value: 0, isPositive: true }}
         />
         <MetricCard
-          title="Budget Restant"
+          title={t("dashboard.remainingBudget")}
           value={fmt(metrics.remainingBudget)}
           icon={TrendingDown}
           trend={{ value: 0, isPositive: false }}
@@ -209,7 +179,12 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Activité Récente</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>{t("dashboard.recentActivity")}</CardTitle>
+              <Button variant="outline" size="sm" onClick={() => { setReloadKey((k) => k + 1); refetch(); }}>
+                {t("common.refresh")}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4 max-h-56 overflow-y-auto sm:max-h-none sm:overflow-visible pr-1">
@@ -219,11 +194,11 @@ export default function Dashboard() {
                     <p className="font-medium">{it.title}</p>
                     <p className="text-sm text-muted-foreground truncate max-w-[70vw] sm:max-w-none">{it.subtitle}</p>
                   </div>
-                  <div className={`h-2 w-2 rounded-full ${it.color === "green" ? "bg-green-500" : "bg-blue-500"}`}></div>
+                  <div className={`h-2 w-2 rounded-full ${it.color === "green" ? "bg-green-500" : it.color === "purple" ? "bg-purple-500" : it.color === "gray" ? "bg-gray-500" : "bg-blue-500"}`}></div>
                 </div>
               ))}
               {recent.length === 0 && (
-                <p className="text-sm text-muted-foreground">Aucune activité récente.</p>
+                <p className="text-sm text-muted-foreground">{t("dashboard.noRecentActivity")}</p>
               )}
             </div>
           </CardContent>
@@ -231,37 +206,37 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Projets par Statut</CardTitle>
+            <CardTitle>{t("dashboard.projectsByStatus")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 bg-green-500 rounded-full"></div>
-                  <span>En cours</span>
+                  <span>{t("status.inProgress")}</span>
                 </div>
-                <span className="font-medium">{statusCounts["In Progress"]} projets</span>
+                <span className="font-medium">{statusCounts["In Progress"]} {statusCounts["In Progress"] === 1 ? t("common.units.project.singular") : t("common.units.project.plural")}</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 bg-yellow-500 rounded-full"></div>
-                  <span>En pause</span>
+                  <span>{t("common.onPause")}</span>
                 </div>
-                <span className="font-medium">{statusCounts["Paused"]} projets</span>
+                <span className="font-medium">{statusCounts["Paused"]} {statusCounts["Paused"] === 1 ? t("common.units.project.singular") : t("common.units.project.plural")}</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 bg-blue-500 rounded-full"></div>
-                  <span>Terminés</span>
+                  <span>{t("status.completed")}</span>
                 </div>
-                <span className="font-medium">{statusCounts["Completed"]} projets</span>
+                <span className="font-medium">{statusCounts["Completed"]} {statusCounts["Completed"] === 1 ? t("common.units.project.singular") : t("common.units.project.plural")}</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 bg-red-500 rounded-full"></div>
-                  <span>Annulés</span>
+                  <span>{t("status.cancelled")}</span>
                 </div>
-                <span className="font-medium">{statusCounts["Cancelled"]} projets</span>
+                <span className="font-medium">{statusCounts["Cancelled"]} {statusCounts["Cancelled"] === 1 ? t("common.units.project.singular") : t("common.units.project.plural")}</span>
               </div>
             </div>
           </CardContent>
@@ -274,28 +249,20 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
-              Actions d'Administration
+              {t("admin.quickActions")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-blue-700 mb-4">
-              En tant que directeur, vous pouvez créer de nouveaux départements et assigner des managers.
+              {t("admin.directorHelp")}
             </p>
             <div className="flex flex-wrap gap-3">
               <CreateDepartmentForm onCreated={() => console.log('Department created')} />
-              <Button className="flex items-center gap-2" onClick={() => {/* trigger department form open logic here */}}>
-                <Building2 className="h-4 w-4" />
-                Nouveau Département
-              </Button>
               <CreateManagerForm onCreated={() => console.log('Manager created')} />
-              <Button className="flex items-center gap-2" onClick={() => {/* trigger manager form open logic here */}}>
-                <UserPlus className="h-4 w-4" />
-                Nouveau Manager
-              </Button>
               <Button  asChild>
                 <Link href="/admin" className="flex items-center gap-2">
                   <Settings className="h-4 w-4" />
-                  Administration Complète
+                  {t("admin.fullAdmin")}
                 </Link>
               </Button>
             </div>
@@ -311,7 +278,7 @@ export default function Dashboard() {
               <span className="text-white text-xs">i</span>
             </div>
             <p className="text-sm">
-              Toutes les données sont mises à jour en temps réel. Dernière synchronisation : il y a 5 minutes.
+              {t("dashboard.dataSyncInfo")}
             </p>
           </div>
         </CardContent>

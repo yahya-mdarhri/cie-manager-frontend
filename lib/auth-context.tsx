@@ -12,6 +12,7 @@ interface User {
   email: string
   role: string
   department?: string
+  avatarUrl?: string | null
 }
 
 interface AuthContextType {
@@ -48,6 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             name: fullName || data.username || data.email || "",
             role: data.role ?? "",
             department: data.department ?? "",
+            avatarUrl: data.profile_picture_url ?? null,
           }
           setUser(u)
           localStorage.setItem("user", JSON.stringify(u))

@@ -28,28 +28,30 @@ import {
   exportCompleteDataServerCSV,
   exportDashboardSummaryCSV
 } from "@/lib/csv-export"
+import { useLanguage } from "@/lib/language-context"
 
 interface ExportMenuProps {
   user: any
 }
 
 export function ExportMenu({ user }: ExportMenuProps) {
+  const { t } = useLanguage()
   const [isExporting, setIsExporting] = useState<string | null>(null)
 
   const handleExport = async (exportType: string, exportFunction: () => Promise<void>) => {
     if (!user) {
-      alert("Erreur: Utilisateur non connecté")
+      alert(t('export.errorNotLoggedIn'))
       return
     }
 
     setIsExporting(exportType)
     try {
       await exportFunction()
-      alert("Export réussi: Les données ont été exportées avec succès")
+      alert(t('export.success'))
     } catch (error) {
       console.error(`Export failed (${exportType}):`, error)
-      const errorMessage = error instanceof Error ? error.message : "Une erreur inattendue s'est produite"
-      alert(`Erreur d'export: ${errorMessage}`)
+      const errorMessage = error instanceof Error ? error.message : t('export.unexpectedError')
+      alert(`${t('export.errorPrefix')}: ${errorMessage}`)
     } finally {
       setIsExporting(null)
     }
@@ -58,43 +60,43 @@ export function ExportMenu({ user }: ExportMenuProps) {
   const exportOptions = [
     {
       key: "projects",
-      label: "Projets",
-      description: "Exporter tous les projets",
+      label: t('export.options.projects.label'),
+      description: t('export.options.projects.description'),
       icon: FolderOpen,
       action: () => exportProjectsServerCSV()
     },
     {
       key: "expenses",
-      label: "Dépenses",
-      description: "Exporter toutes les dépenses",
+      label: t('export.options.expenses.label'),
+      description: t('export.options.expenses.description'),
       icon: Receipt,
       action: () => exportExpensesServerCSV()
     },
     {
       key: "payments",
-      label: "Encaissements",
-      description: "Exporter tous les encaissements",
+      label: t('export.options.payments.label'),
+      description: t('export.options.payments.description'),
       icon: CreditCard,
       action: () => exportPaymentsServerCSV()
     },
     {
       key: "jalons",
-      label: "Jalons",
-      description: "Exporter tous les jalons",
+      label: t('export.options.jalons.label'),
+      description: t('export.options.jalons.description'),
       icon: Calendar,
       action: () => exportJalonsServerCSV()
     },
     {
       key: "dashboard",
-      label: "Résumé Dashboard",
-      description: "Exporter le résumé du tableau de bord",
+      label: t('export.options.dashboard.label'),
+      description: t('export.options.dashboard.description'),
       icon: Database,
       action: () => exportDashboardSummaryCSV()
     },
     {
       key: "complete",
-      label: "Données complètes",
-      description: "Exporter toutes les données (5 fichiers)",
+      label: t('export.options.complete.label'),
+      description: t('export.options.complete.description'),
       icon: Database,
       action: () => exportCompleteDataServerCSV(),
       separator: true
@@ -110,13 +112,13 @@ export function ExportMenu({ user }: ExportMenuProps) {
           ) : (
             <Download className="h-4 w-4" />
           )}
-          {isExporting ? "Export en cours..." : "Exporter les données"}
+          {isExporting ? t('export.exporting') : t('export.exportData')}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="flex items-center gap-2">
           <FileSpreadsheet className="h-4 w-4" />
-          Export CSV
+          {t('export.exportCsv')}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         
@@ -143,7 +145,7 @@ export function ExportMenu({ user }: ExportMenuProps) {
         <DropdownMenuSeparator />
         <div className="px-3 py-2">
           <p className="text-xs text-muted-foreground">
-            Les fichiers CSV sont compatibles avec Excel, Google Sheets et autres tableurs.
+            {t('export.note')}
           </p>
         </div>
       </DropdownMenuContent>

@@ -13,6 +13,7 @@ import AssignManagersForm from "@/components/forms/assign-managers-form"
 import CreateManagerForm from "@/components/forms/create-manager-form"
 import EditUserForm from "@/components/forms/edit-user-form"
 import { useAuth } from "@/lib/auth-context"
+import { useLanguage } from "@/lib/language-context"
 import { usePagination } from "@/hooks/use-pagination"
 import { http } from "@/lib/http"
 
@@ -44,35 +45,38 @@ interface User {
   created_at: string
 }
 
-const departmentColumns = [
-  { key: "name", label: "Nom du Département" },
-  { key: "description", label: "Description" },
-  { key: "manager", label: "Manager" },
-  { key: "projects_count", label: "Projets", className: "text-center" },
-  { key: "created_at", label: "Créé le" },
-  { key: "actions", label: "Actions", className: "text-center" }
-]
-
-const userColumns = [
-  { key: "name", label: "Nom Complet" },
-  { key: "email", label: "Email" },
-  { key: "username", label: "Nom d'utilisateur" },
-  { key: "role", label: "Rôle" },
-  { key: "department", label: "Département" },
-  { key: "created_at", label: "Créé le" },
-  { key: "actions", label: "Actions", className: "text-center" }
-]
-
 export default function AdminPage() {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const { pagination: deptPagination, goToPage: goToDeptPage, updateFromResponse: updateDeptFromResponse } = usePagination(10)
   const { pagination: userPagination, goToPage: goToUserPage, updateFromResponse: updateUserFromResponse } = usePagination(10)
   
   const [departments, setDepartments] = useState<Department[]>([])
   const [users, setUsers] = useState<User[]>([])
+  const [managersCount, setManagersCount] = useState(0)
   const [loadingDepartments, setLoadingDepartments] = useState(false)
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [activeTab, setActiveTab] = useState<"departments" | "users">("departments")
+
+  // Column definitions with translations
+  const departmentColumns = [
+    { key: "name", label: t("admin.departmentName") },
+    { key: "description", label: t("admin.departmentDescription") },
+    { key: "manager", label: t("admin.departmentManager") },
+    { key: "projects_count", label: t("admin.departmentProjects"), className: "text-center" },
+    { key: "created_at", label: t("admin.departmentCreatedAt") },
+    { key: "actions", label: t("common.actions"), className: "text-center" }
+  ]
+
+  const userColumns = [
+    { key: "name", label: t("admin.userName") },
+    { key: "email", label: t("admin.userEmail") },
+    { key: "username", label: t("admin.userUsername") },
+    { key: "role", label: t("admin.userRole") },
+    { key: "department", label: t("admin.userDepartment") },
+    { key: "created_at", label: t("admin.userCreatedAt") },
+    { key: "actions", label: t("common.actions"), className: "text-center" }
+  ]
 
   // Redirect if not director
   useEffect(() => {
@@ -133,6 +137,17 @@ export default function AdminPage() {
       const data = response.data?.results || response.data || []
       setUsers(Array.isArray(data) ? data : [])
       updateUserFromResponse(response.data)
+      
+      // Count total managers separately
+      try {
+        const managersResponse = await http.get("/api/management/users/", {
+          params: { role: "department_manager" }
+        })
+        const managersData = managersResponse.data?.results || managersResponse.data || []
+        setManagersCount(Array.isArray(managersData) ? managersData.length : managersResponse.data?.count || 0)
+      } catch (error) {
+        console.warn("Failed to fetch managers count:", error)
+      }
     } catch (error) {
       console.error("Error loading users:", error)
     } finally {
@@ -140,8 +155,40 @@ export default function AdminPage() {
     }
   }
 
+  // Load statistics (for cards at the top)
+  const loadStatistics = async () => {
+    if (!user || user.role !== "director") return
+    
+    try {
+      // Get total departments count
+      const deptResponse = await http.get("/api/management/departments/", {
+        params: { page: 1, size: 1 } // Just get first page to extract total count
+      })
+      updateDeptFromResponse(deptResponse.data)
+      
+      // Get total users count
+      const usersResponse = await http.get("/api/accounts/users/", {
+        params: { page: 1, size: 1 }
+      })
+      updateUserFromResponse(usersResponse.data)
+      
+      // Get total managers count
+      const managersResponse = await http.get("/api/management/users/", {
+        params: { role: "department_manager" }
+      })
+      const managersData = managersResponse.data?.results || managersResponse.data || []
+      setManagersCount(Array.isArray(managersData) ? managersData.length : managersResponse.data?.count || 0)
+    } catch (error) {
+      console.error("Error loading statistics:", error)
+    }
+  }
+
   useEffect(() => {
     if (user && user.role === "director") {
+      // Load statistics on mount
+      loadStatistics()
+      
+      // Load data for active tab
       if (activeTab === "departments") {
         loadDepartments()
       } else {
@@ -151,22 +198,23 @@ export default function AdminPage() {
   }, [user, activeTab, deptPagination.currentPage, userPagination.currentPage])
 
   const handleDeleteDepartment = async (departmentId: number) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer ce département ? Cette action est irréversible.")) {
+    if (!confirm(t("admin.confirmDeleteDepartment"))) {
       return
     }
 
     try {
       await http.delete(`/api/management/departments/${departmentId}/`)
       await loadDepartments()
-      alert("Département supprimé avec succès")
+      await loadStatistics()
+      alert(t("admin.departmentDeleted"))
     } catch (error) {
       console.error("Error deleting department:", error)
-      alert("Erreur lors de la suppression du département")
+      alert(t("admin.errorDeletingDepartment"))
     }
   }
 
   const handleDeleteUser = async (userId: number) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible.")) {
+    if (!confirm(t("admin.confirmDeleteUser"))) {
       return
     }
 
@@ -183,10 +231,11 @@ export default function AdminPage() {
         }
       }
       await loadUsers()
-      alert("Utilisateur supprimé avec succès")
+      await loadStatistics()
+      alert(t("admin.userDeleted"))
     } catch (error) {
       console.error("Error deleting user:", error)
-      alert("Erreur lors de la suppression de l'utilisateur")
+      alert(t("admin.errorDeletingUser"))
     }
   }
 
@@ -196,9 +245,9 @@ export default function AdminPage() {
 
   const getRoleBadge = (role: string) => {
     const roleMap: Record<string, { label: string; variant: any }> = {
-      director: { label: "Directeur", variant: "default" },
-      department_manager: { label: "Manager", variant: "secondary" },
-      user: { label: "Utilisateur", variant: "outline" }
+      director: { label: t("roles.director"), variant: "default" },
+      department_manager: { label: t("roles.department_manager"), variant: "secondary" },
+      user: { label: t("roles.user"), variant: "outline" }
     }
     const roleInfo = roleMap[role] || { label: role, variant: "outline" }
     return <Badge variant={roleInfo.variant}>{roleInfo.label}</Badge>
@@ -208,23 +257,38 @@ export default function AdminPage() {
   const departmentData = departments.map((dept) => ({
     ...dept,
     manager: dept.managers && dept.managers.length > 0 
-      ? dept.managers.map(m => `${m.first_name} ${m.last_name}`).join(", ")
-      : <Badge variant="outline">Aucun manager</Badge>,
+      ? (
+          <div className="flex flex-col gap-1">
+            <Badge variant="secondary" className="w-fit">
+              {dept.managers.length} {t("admin.managerCount")}
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              {dept.managers.map(m => `${m.first_name} ${m.last_name}`).join(", ")}
+            </span>
+          </div>
+        )
+      : <Badge variant="outline">{t("admin.noManager")}</Badge>,
     created_at: formatDate(dept.created_at),
     actions: (
       <div className="flex items-center justify-center gap-1">
         <AssignManagersForm
           department={dept}
-          onUpdated={loadDepartments}
+          onUpdated={() => {
+            loadDepartments()
+            loadStatistics()
+          }}
           trigger={
-            <Button size="sm" variant="ghost" title="Assigner des managers">
+            <Button size="sm" variant="ghost" title={t("admin.assignManagers")}>
               <Users className="h-4 w-4" />
             </Button>
           }
         />
         <EditDepartmentForm
           department={dept}
-          onUpdated={loadDepartments}
+          onUpdated={() => {
+            loadDepartments()
+            loadStatistics()
+          }}
           trigger={
             <Button size="sm" variant="ghost">
               <Edit className="h-4 w-4" />
@@ -247,7 +311,7 @@ export default function AdminPage() {
     ...user,
     name: `${user.first_name} ${user.last_name}`,
     role: getRoleBadge(user.role),
-    department: user.department ? user.department.name : <Badge variant="outline">Aucun</Badge>,
+    department: user.department ? user.department.name : <Badge variant="outline">{t("admin.noDepartment")}</Badge>,
     created_at: formatDate(user.created_at),
     actions: (
       <div className="flex items-center justify-center gap-1">
@@ -256,6 +320,7 @@ export default function AdminPage() {
           onUpdated={() => {
             loadUsers()
             loadDepartments()
+            loadStatistics()
           }}
         />
         <Button 
@@ -274,8 +339,8 @@ export default function AdminPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Accès Refusé</h1>
-          <p className="text-muted-foreground">Cette page est réservée aux directeurs.</p>
+          <h1 className="text-2xl font-bold mb-4">{t("admin.accessDenied")}</h1>
+          <p className="text-muted-foreground">{t("admin.accessDeniedMessage")}</p>
         </div>
       </div>
     )
@@ -285,18 +350,21 @@ export default function AdminPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Administration</h1>
+          <h1 className="text-3xl font-bold text-foreground">{t("admin.title")}</h1>
           <p className="text-muted-foreground">
-            Gestion des départements et utilisateurs
+            {t("admin.subtitle")}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <CreateDepartmentForm 
-            onCreated={loadDepartments}
+            onCreated={() => {
+              loadDepartments()
+              loadStatistics()
+            }}
             trigger={
               <Button className="flex items-center gap-2">
                 <Building2 className="h-4 w-4" />
-                Nouveau Département
+                {t("admin.newDepartment")}
               </Button>
             }
           />
@@ -304,11 +372,12 @@ export default function AdminPage() {
             onCreated={() => {
               loadDepartments()
               loadUsers()
+              loadStatistics()
             }}
             trigger={
               <Button className="flex items-center gap-2">
                 <UserPlus className="h-4 w-4" />
-                Nouveau Manager
+                {t("admin.newManager")}
               </Button>
             }
           />
@@ -319,39 +388,39 @@ export default function AdminPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Départements</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("admin.departments")}</CardTitle>
             <Building className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{departments.length}</div>
+            <div className="text-2xl font-bold">{deptPagination.totalCount}</div>
             <p className="text-xs text-muted-foreground">
-              Départements actifs
+              {t("admin.activeDepartments")}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Utilisateurs</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("admin.users")}</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{users.length}</div>
+            <div className="text-2xl font-bold">{userPagination.totalCount}</div>
             <p className="text-xs text-muted-foreground">
-              Utilisateurs enregistrés
+              {t("admin.registeredUsers")}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Managers</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("admin.managers")}</CardTitle>
             <UserPlus className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {users.filter(u => u.role === "department_manager").length}
+              {managersCount}
             </div>
             <p className="text-xs text-muted-foreground">
-              Managers de département
+              {t("admin.departmentManagers")}
             </p>
           </CardContent>
         </Card>
@@ -368,7 +437,7 @@ export default function AdminPage() {
           }`}
         >
           <Building className="h-4 w-4 mr-2 inline" />
-          Départements
+          {t("admin.departments")}
         </button>
         <button
           onClick={() => setActiveTab("users")}
@@ -379,7 +448,7 @@ export default function AdminPage() {
           }`}
         >
           <Users className="h-4 w-4 mr-2 inline" />
-          Utilisateurs
+          {t("admin.users")}
         </button>
       </div>
 
@@ -387,7 +456,7 @@ export default function AdminPage() {
       {activeTab === "departments" ? (
         <>
           <DataTable
-            title="Liste des Départements"
+            title={t("admin.departmentsList")}
             columns={departmentColumns}
             data={departmentData}
             loading={loadingDepartments}
@@ -395,7 +464,7 @@ export default function AdminPage() {
           />
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
-              Affichage de {departments.length} département(s)
+              {t("common.showing")} {departments.length} {t("admin.departmentCount")}
             </div>
             <Pagination
               currentPage={deptPagination.currentPage}
@@ -407,7 +476,7 @@ export default function AdminPage() {
       ) : (
         <>
           <DataTable
-            title="Liste des Utilisateurs"
+            title={t("admin.usersList")}
             columns={userColumns}
             data={userData}
             loading={loadingUsers}
@@ -415,7 +484,7 @@ export default function AdminPage() {
           />
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
-              Affichage de {users.length} utilisateur(s)
+              {t("common.showing")} {users.length} {t("admin.userCount")}
             </div>
             <Pagination
               currentPage={userPagination.currentPage}

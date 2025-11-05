@@ -9,10 +9,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar, Plus, Edit, Trash2, CheckCircle, Clock, AlertTriangle, Upload, FileText, Eye, BarChart3 } from "lucide-react"
 import { http } from "@/lib/http"
+import { useToast } from "@/hooks/use-toast"
 import GanttDialog from "@/components/dialogs/gantt-dialog"
+import { useLanguage } from "@/lib/language-context"
 
 interface Jalon {
   id: number
@@ -64,11 +76,14 @@ export default function JalonManagement({
   projectDescription,
   onUpdate 
 }: JalonManagementProps) {
-  const [jalons, setJalons] = useState<Jalon[]>([])
+  const { t } = useLanguage()
+  const [jalons, setJalons] = useState<Jalon[]>([]) // State for jalons
+  const { toast } = useToast() // Hook for toasts
   const [loading, setLoading] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingJalon, setEditingJalon] = useState<Jalon | null>(null)
   const [executingJalon, setExecutingJalon] = useState<Jalon | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Jalon | null>(null)
   const [showGanttView, setShowGanttView] = useState(false)
   const [formData, setFormData] = useState<JalonFormData>({
     name: "",
@@ -112,8 +127,7 @@ export default function JalonManagement({
 
       await http.post(
         `/api/management/departments/${departmentId}/projects/${projectId}/steps/create/`,
-        fd,
-        { headers: { "Content-Type": "multipart/form-data" } }
+        fd
       )
 
       await fetchJalons()
@@ -128,7 +142,10 @@ export default function JalonManagement({
       onUpdate?.()
     } catch (error) {
       console.error("Error creating jalon:", error)
-      alert("Erreur lors de la création du jalon")
+      toast({
+        title: t("messages.error"),
+        description: t("jalon.errors.create"),
+      })
     }
   }
 
@@ -142,8 +159,7 @@ export default function JalonManagement({
 
       await http.put(
         `/api/management/departments/${departmentId}/projects/${projectId}/steps/${jalonId}/`,
-        fd,
-        { headers: { "Content-Type": "multipart/form-data" } }
+        fd
       )
 
       await fetchJalons()
@@ -151,22 +167,38 @@ export default function JalonManagement({
       onUpdate?.()
     } catch (error) {
       console.error("Error updating jalon:", error)
-      alert("Erreur lors de la modification du jalon")
+      toast({
+        title: t("messages.error"),
+        description: t("jalon.errors.update"),
+      })
     }
   }
 
   const handleDeleteJalon = async (jalonId: number) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer ce jalon ?")) return
-
     try {
-      await http.delete(
-        `/api/management/departments/${departmentId}/projects/${projectId}/steps/${jalonId}/`
-      )
+      // Optimistic update for snappy UI
+      setJalons(prev => prev.filter(j => j.id !== jalonId))
+      const url = `/api/management/departments/${departmentId}/projects/${projectId}/steps/${jalonId}/`
+      await http.delete(url)
+      // Ensure fresh data
       await fetchJalons()
+      toast({
+        title: t("messages.success"),
+        description: t("messages.deleteSuccess"),
+      })
       onUpdate?.()
     } catch (error) {
       console.error("Error deleting jalon:", error)
-      alert("Erreur lors de la suppression du jalon")
+      // Try to surface backend error details if available
+      const anyErr: any = error
+      const status = anyErr?.response?.status
+      const detail = anyErr?.response?.data?.details || anyErr?.response?.data?.detail || anyErr?.message || t("jalon.errors.delete")
+      toast({
+        title: t("messages.error"),
+        description: `${String(detail)}${status ? ` (HTTP ${status})` : ""}`,
+      })
+      // Re-sync list if the optimistic removal was incorrect
+      fetchJalons()
     }
   }
 
@@ -181,8 +213,7 @@ export default function JalonManagement({
 
       await http.put(
         `/api/management/departments/${departmentId}/projects/${projectId}/steps/${jalonId}/execute/`,
-        fd,
-        { headers: { "Content-Type": "multipart/form-data" } }
+        fd
       )
 
       await fetchJalons()
@@ -191,7 +222,10 @@ export default function JalonManagement({
       onUpdate?.()
     } catch (error) {
       console.error("Error executing jalon:", error)
-      alert("Erreur lors de l'exécution du jalon")
+      toast({
+        title: t("messages.error"),
+        description: t("jalon.errors.execute"),
+      })
     }
   }
 
@@ -238,7 +272,7 @@ export default function JalonManagement({
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              Jalons du Projet
+              {t("jalon.management.title")}
             </CardTitle>
             <div className="flex items-center gap-2">
               {jalons.length > 0 && (
@@ -247,12 +281,12 @@ export default function JalonManagement({
                   onClick={() => setShowGanttView(true)}
                 >
                   <BarChart3 className="h-4 w-4 mr-2" />
-                  Vue Gantt
+                  {t("jalon.management.ganttView")}
                 </Button>
               )}
               <Button onClick={() => setShowCreateModal(true)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Nouveau Jalon
+                {t("jalon.management.new")}
               </Button>
             </div>
           </div>
@@ -260,7 +294,7 @@ export default function JalonManagement({
         <CardContent>
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span>Progression globale</span>
+              <span>{t("jalon.management.progress")}</span>
               <span>{Math.round(calculateProgress())}% ({jalons.filter(j => j.execution_status).length}/{jalons.length})</span>
             </div>
             <Progress value={calculateProgress()} className="h-2" />
@@ -273,7 +307,7 @@ export default function JalonManagement({
         {loading ? (
           <Card>
             <CardContent className="p-6 text-center">
-              <p>Chargement des jalons...</p>
+              <p>{t("jalon.management.loading")}</p>
             </CardContent>
           </Card>
         ) : jalons.length > 0 ? (
@@ -289,7 +323,7 @@ export default function JalonManagement({
                         <Badge className={statusColors[status as keyof typeof statusColors]}>
                           <div className="flex items-center gap-1">
                             {getStatusIcon(status)}
-                            {status === "completed" ? "Terminé" : status === "overdue" ? "En retard" : "En cours"}
+                            {status === "completed" ? t("jalon.status.completed") : status === "overdue" ? t("jalon.status.overdue") : t("jalon.status.inProgress")}
                           </div>
                         </Badge>
                       </div>
@@ -297,17 +331,17 @@ export default function JalonManagement({
                       <div className="flex items-center gap-6 text-sm text-gray-500">
                         <div className="flex items-center gap-1">
                           <Calendar className="h-4 w-4" />
-                          <span>Début: {new Date(jalon.start_date).toLocaleDateString("fr-FR")}</span>
+                          <span>{t("jalon.management.start")} {new Date(jalon.start_date).toLocaleDateString("fr-FR")}</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <Calendar className="h-4 w-4" />
-                          <span>Fin: {new Date(jalon.end_date).toLocaleDateString("fr-FR")}</span>
+                          <span>{t("jalon.management.end")} {new Date(jalon.end_date).toLocaleDateString("fr-FR")}</span>
                         </div>
                       </div>
                       {jalon.execution_comments && (
                         <div className="mt-3 p-3 bg-gray-50 rounded-lg">
                           <p className="text-sm">
-                            <strong>Commentaires d'exécution:</strong> {jalon.execution_comments}
+                            <strong>{t("jalon.management.executionComments")}:</strong> {jalon.execution_comments}
                           </p>
                         </div>
                       )}
@@ -316,7 +350,7 @@ export default function JalonManagement({
                       {jalon.execution_proof && (
                         <Button size="sm" variant="outline">
                           <FileText className="h-4 w-4 mr-1" />
-                          Preuve
+                          {t("jalon.management.proof")}
                         </Button>
                       )}
                       {!jalon.execution_status && (
@@ -326,7 +360,7 @@ export default function JalonManagement({
                           onClick={() => setExecutingJalon(jalon)}
                         >
                           <CheckCircle className="h-4 w-4 mr-1" />
-                          Marquer terminé
+                          {t("jalon.management.markDone")}
                         </Button>
                       )}
                       <Button
@@ -339,7 +373,8 @@ export default function JalonManagement({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleDeleteJalon(jalon.id)}
+                        type="button"
+                        onClick={() => setDeleteTarget(jalon)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -352,10 +387,10 @@ export default function JalonManagement({
         ) : (
           <Card>
             <CardContent className="p-6 text-center">
-              <p className="text-gray-500 mb-4">Aucun jalon n'a été défini pour ce projet.</p>
+              <p className="text-gray-500 mb-4">{t("jalon.management.none")}</p>
               <Button onClick={() => setShowCreateModal(true)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Créer le premier jalon
+                {t("jalon.management.createFirst")}
               </Button>
             </CardContent>
           </Card>
@@ -379,22 +414,22 @@ export default function JalonManagement({
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {editingJalon ? "Modifier le jalon" : "Nouveau jalon"}
+              {editingJalon ? t("jalon.management.editTitle") : t("jalon.management.createTitle")}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="name">Nom du jalon*</Label>
+                <Label htmlFor="name">{t("jalon.management.form.name")}</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Ex: Livraison phase 1"
+                  placeholder={t("jalon.management.form.namePlaceholder")}
                 />
               </div>
               <div>
-                <Label htmlFor="priority">Priorité</Label>
+                <Label htmlFor="priority">{t("jalon.management.form.priority")}</Label>
                 <Select
                   value={formData.priority}
                   onValueChange={(value) => setFormData(prev => ({ ...prev, priority: value as any }))}
@@ -403,36 +438,37 @@ export default function JalonManagement({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Low">Faible</SelectItem>
-                    <SelectItem value="Medium">Moyenne</SelectItem>
-                    <SelectItem value="High">Élevée</SelectItem>
-                    <SelectItem value="Critical">Critique</SelectItem>
+                    <SelectItem value="Low">{t("form.project.priorityLow")}</SelectItem>
+                    <SelectItem value="Medium">{t("form.project.priorityMedium")}</SelectItem>
+                    <SelectItem value="High">{t("form.project.priorityHigh")}</SelectItem>
+                    <SelectItem value="Critical">{t("form.project.priorityCritical")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div>
-              <Label htmlFor="description">Description*</Label>
+              <Label htmlFor="description">{t("jalon.management.form.description")}</Label>
               <Textarea
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Décrivez les objectifs et livrables de ce jalon..."
+                placeholder={t("jalon.management.form.descriptionPlaceholder")}
                 className="min-h-[100px]"
               />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="start_date">Date de début*</Label>
+                <Label htmlFor="start_date">{t("jalon.management.form.startDate")}</Label>
                 <Input
                   id="start_date"
                   type="date"
                   value={formData.start_date}
                   onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
                 />
+                <p className="text-xs text-gray-500 mt-1">{t("jalon.management.form.dateHint")}</p>
               </div>
               <div>
-                <Label htmlFor="end_date">Date de fin*</Label>
+                <Label htmlFor="end_date">{t("jalon.management.form.endDate")}</Label>
                 <Input
                   id="end_date"
                   type="date"
@@ -442,7 +478,7 @@ export default function JalonManagement({
                 />
                 {projectEndDate && (
                   <p className="text-xs text-gray-500 mt-1">
-                    Date limite du projet: {new Date(projectEndDate).toLocaleDateString("fr-FR")}
+                    {t("jalon.management.projectDeadline")}: {new Date(projectEndDate).toLocaleDateString("fr-FR")}
                   </p>
                 )}
               </div>
@@ -455,7 +491,7 @@ export default function JalonManagement({
                   setEditingJalon(null)
                 }}
               >
-                Annuler
+                {t("common.cancel")}
               </Button>
               <Button 
                 onClick={() => {
@@ -465,9 +501,9 @@ export default function JalonManagement({
                     handleCreateJalon()
                   }
                 }}
-                disabled={!formData.name || !formData.description || !formData.start_date || !formData.end_date}
+                disabled={!formData.name || !formData.description}
               >
-                {editingJalon ? "Modifier" : "Créer"} le jalon
+                {editingJalon ? t("jalon.management.saveEdit") : t("jalon.management.createAction")}
               </Button>
             </div>
           </div>
@@ -483,7 +519,7 @@ export default function JalonManagement({
       }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Marquer le jalon comme terminé</DialogTitle>
+            <DialogTitle>{t("jalon.management.executeTitle")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="p-4 bg-gray-50 rounded-lg">
@@ -491,36 +527,34 @@ export default function JalonManagement({
               <p className="text-sm text-gray-600 mt-1">{executingJalon?.description}</p>
             </div>
             <div>
-              <Label htmlFor="comments">Commentaires d'exécution</Label>
+              <Label htmlFor="comments">{t("jalon.management.executionComments")}</Label>
               <Textarea
                 id="comments"
                 value={executionForm.comments}
                 onChange={(e) => setExecutionForm(prev => ({ ...prev, comments: e.target.value }))}
-                placeholder="Décrivez ce qui a été accompli, les résultats obtenus..."
+                placeholder={t("jalon.management.executionCommentsPlaceholder")}
                 className="min-h-[100px]"
               />
             </div>
             <div>
-              <Label htmlFor="proof">Preuve d'exécution (optionnel)</Label>
+              <Label htmlFor="proof">{t("jalon.management.executionProof")}</Label>
               <Input
                 id="proof"
                 type="file"
                 onChange={(e) => setExecutionForm(prev => ({ ...prev, proof: e.target.files?.[0] || null }))}
                 accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Formats acceptés: PDF, Word, images (max 10MB)
-              </p>
+              <p className="text-xs text-gray-500 mt-1">{t("jalon.management.acceptedFormats")}</p>
             </div>
             <div className="flex justify-end gap-3 pt-4">
               <Button variant="outline" onClick={() => setExecutingJalon(null)}>
-                Annuler
+                {t("common.cancel")}
               </Button>
               <Button 
                 onClick={() => executingJalon && handleExecuteJalon(executingJalon.id)}
                 className="bg-green-600 hover:bg-green-700"
               >
-                Marquer comme terminé
+                {t("jalon.management.markAsCompleted")}
               </Button>
             </div>
           </div>
@@ -548,6 +582,36 @@ export default function JalonManagement({
           comments: jalon.execution_comments
         }))}
       />
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("common.confirm")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("jalon.management.confirmDelete")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteTarget(null)}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                type="button"
+                onClick={() => {
+                  if (deleteTarget) {
+                    handleDeleteJalon(deleteTarget.id)
+                  }
+                  setDeleteTarget(null)
+                }}
+              >
+                {t("common.delete")}
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

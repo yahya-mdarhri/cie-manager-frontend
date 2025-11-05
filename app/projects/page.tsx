@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Pagination } from "@/components/ui/pagination";
-import { Plus, Search, Settings, Eye, Edit, Download } from "lucide-react";
+import { Plus, Search, Settings, Eye, Download } from "lucide-react";
 import { DialogTrigger } from "@/components/ui/dialog";
 import {
   Select,
@@ -17,24 +17,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { NewProjectForm } from "@/components/forms/new-project-form"
-import EditProjectForm from "@/components/forms/edit-project-form"
 import ViewProjectForm from "@/components/forms/project-view"
 import { useAuth } from "@/lib/auth-context"
+import { useLanguage } from "@/lib/language-context"
 import { usePagination } from "@/hooks/use-pagination"
 import { http } from "@/lib/http"
 import { exportProjectsServerCSV } from "@/lib/csv-export"
-
-// Columns definition
-const columns = [
-  { key: "code", label: "Code" },
-  { key: "name", label: "Nom du Projet" },
-  { key: "department", label: "Département" },
-  { key: "coordinator", label: "Coordinateur" },
-  { key: "totalBudget", label: "Budget Total", className: "text-right" },
-  { key: "remainingBudget", label: "Budget Restant", className: "text-right" },
-  { key: "status", label: "Statut" },
-  { key: "actions", label: "Actions", className: "text-center" },
-];
 async function fetchProjectsForUser(
   user: { role: string; department?: string | number | null },
   page: number = 1,
@@ -112,17 +100,48 @@ const base = "/api/management";
 
 export default function ProjectsPage() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const { pagination, goToPage, updateFromResponse } = usePagination(10);
   const [projects, setProjects] = useState(initialProjectData);
   const [filteredProjects, setFilteredProjects] = useState(initialProjectData);
-  const [editingProject, setEditingProject] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
+  const [departments, setDepartments] = useState<Array<{ id: number; name: string }>>([])
+  const [departmentsLoading, setDepartmentsLoading] = useState(false)
+
+  // Map backend status values to localized labels
+  const statusLabel = (s?: string) => {
+    switch (s) {
+      case "In Progress":
+        return t("status.inProgress");
+      case "Paused":
+        return t("status.paused");
+      case "Completed":
+        return t("status.completed");
+      case "Cancelled":
+      case "Canceled":
+        return t("status.cancelled");
+      default:
+        return s || "-";
+    }
+  };
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [viewingProject, setViewingProject] = useState<any | null>(null);
+  
+  // Columns definition with translations
+  const columns = [
+    { key: "code", label: t("projects.code") },
+    { key: "name", label: t("projects.name") },
+    { key: "department", label: t("projects.department") },
+    { key: "coordinator", label: t("projects.coordinator") },
+    { key: "totalBudget", label: t("projects.totalBudget"), className: "text-right" },
+    { key: "remainingBudget", label: t("projects.remainingBudget"), className: "text-right" },
+    { key: "status", label: t("projects.status") },
+    { key: "actions", label: t("projects.actions"), className: "text-center" },
+  ];
 
   async function reload() {
     if (!user) return;
@@ -133,7 +152,12 @@ export default function ProjectsPage() {
         pagination.currentPage,
         pagination.pageSize,
       );
-      setProjects(data.projects);
+      // Keep a separate code for status filtering and presentation mapping later
+      const withCodes = (data.projects || []).map((p: any) => ({
+        ...p,
+        statusCode: p.status,
+      }));
+      setProjects(withCodes);
       updateFromResponse(data.pagination);
     } finally {
       setLoading(false);
@@ -143,6 +167,28 @@ export default function ProjectsPage() {
   useEffect(() => {
     reload();
   }, [user, pagination.currentPage, pagination.pageSize]);
+
+  // Load departments from backend for the filter
+  useEffect(() => {
+    const loadDeps = async () => {
+      if (!user) return
+      setDepartmentsLoading(true)
+      try {
+        const allowed = new Set(["CIE Direct", "Tech Center", "TTO", "Clinique Industrielle"]) // keep same policy as elsewhere
+        // Directors can see all departments
+        const { data: raw } = await http.get(`/api/management/departments/`)
+        const arr = Array.isArray((raw as any)?.results || raw) ? (raw as any).results || raw : []
+        const list = user.role === "director" ? arr : arr.filter((d: any) => allowed.has(d.name))
+        setDepartments(list.map((d: any) => ({ id: Number(d.id), name: String(d.name) })))
+      } catch (e) {
+        // leave departments empty on error
+        setDepartments([])
+      } finally {
+        setDepartmentsLoading(false)
+      }
+    }
+    loadDeps()
+  }, [user])
 
   // Apply filters whenever projects or filter criteria change
   useEffect(() => {
@@ -159,26 +205,16 @@ export default function ProjectsPage() {
       );
     }
 
-    // Apply department filter
+    // Apply department filter (from backend list)
     if (selectedDepartment !== "all") {
-      const departmentMap: Record<string, string> = {
-        tto: "TTO",
-        clinique: "Clinique Industrielle",
-        tech: "Tech Center",
-        cie: "CIE Direct",
-      };
-      const departmentName = departmentMap[selectedDepartment];
-      if (departmentName) {
-        filtered = filtered.filter(
-          (project) => project.department === departmentName,
-        );
-      }
+      const depId = Number(selectedDepartment)
+      filtered = filtered.filter((project: any) => Number(project.departmentId) === depId)
     }
 
     // Apply status filter
     if (selectedStatus !== "all") {
       filtered = filtered.filter(
-        (project) => project.status === selectedStatus,
+        (project: any) => project.statusCode === selectedStatus,
       );
     }
 
@@ -205,13 +241,15 @@ export default function ProjectsPage() {
       await exportProjectsServerCSV();
     } catch (error) {
       console.error('Export failed:', error);
-      alert('Erreur lors de l\'export des projets');
+      alert(t("messages.error"));
     }
   };
 
   // Add actions column dynamically
   const dataWithActions = filteredProjects.map((project) => ({
     ...project,
+    // Present a localized status label in the table while keeping statusCode for filters
+    status: statusLabel((project as any).statusCode ?? (project as any).status),
     actions: (
       <div className="flex items-center justify-center gap-1">
         <Button
@@ -224,16 +262,9 @@ export default function ProjectsPage() {
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => setEditingProject(project)}
-        >
-          <Edit className="h-4 w-4" />
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
           onClick={async () => {
             if (!user) return;
-            if (!confirm("Supprimer ce projet ?")) return;
+            if (!confirm(t("messages.confirmDelete"))) return;
             try {
               const depId = project.departmentId;
               const projId = project.id;
@@ -248,7 +279,7 @@ export default function ProjectsPage() {
             }
           }}
         >
-          Suppr.
+          {t("common.delete")}
         </Button>
       </div>
     ),
@@ -259,10 +290,10 @@ export default function ProjectsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">
-            Gestion des Projets
+            {t("projects.title")}
           </h1>
           <p className="text-muted-foreground">
-            Suivi et gestion de tous vos projets
+            {t("projects.all")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -280,62 +311,60 @@ export default function ProjectsPage() {
           >
             <Button className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
-              Nouveau Projet
+              {t("projects.new")}
             </Button>
           </NewProjectForm>
           <Button variant="ghost" className="flex items-center gap-2" onClick={handleExportCSV}>
             <Download className="h-4 w-4" />
-            Exporter CSV
+            {t("projects.export")}
           </Button>
           <Button variant="ghost" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
-            Paramètres
+            {t("header.settings")}
           </Button>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Rechercher</CardTitle>
+          <CardTitle>{t("common.search")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Code, nom ou coordinateur..."
+                placeholder={t("projects.search")}
                 className="pl-10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             {user?.role !== "department_manager" && (
-              <Select
-                value={selectedDepartment}
-                onValueChange={setSelectedDepartment}
-              >
+              <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Tous les départements" />
+                  <SelectValue placeholder={t("common.allDepartments")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous les départements</SelectItem>
-                  <SelectItem value="tto">TTO</SelectItem>
-                  <SelectItem value="clinique">Clinique Industrielle</SelectItem>
-                  <SelectItem value="tech">Tech Center</SelectItem>
-                  <SelectItem value="cie">CIE Direct</SelectItem>
+                  <SelectItem value="all">{t("common.allDepartments")}</SelectItem>
+                  {departments.map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             )}
             <Select value={selectedStatus} onValueChange={setSelectedStatus}>
               <SelectTrigger>
-                <SelectValue placeholder="Tous les statuts" />
+                <SelectValue placeholder={t("common.allStatuses")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous les statuts</SelectItem>
-                <SelectItem value="en-cours">En cours</SelectItem>
-                <SelectItem value="en-pause">En pause</SelectItem>
-                <SelectItem value="termine">Terminé</SelectItem>
-                <SelectItem value="annule">Annulé</SelectItem>
+                <SelectItem value="all">{t("common.allStatuses")}</SelectItem>
+                <SelectItem value="In Progress">{t("status.inProgress")}</SelectItem>
+                <SelectItem value="Paused">{t("status.paused")}</SelectItem>
+                <SelectItem value="Completed">{t("status.completed")}</SelectItem>
+                <SelectItem value="Cancelled">{t("status.cancelled")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -343,7 +372,7 @@ export default function ProjectsPage() {
       </Card>
 
       <DataTable
-        title="Liste des Projets"
+        title={t("projects.title")}
         columns={columns}
         data={dataWithActions}
         loading={loading}
@@ -353,14 +382,14 @@ export default function ProjectsPage() {
       {/* Pagination */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Affichage de {filteredProjects.length} projet(s) sur{" "}
-          {pagination.totalCount} total
+          {t("common.showing")} {filteredProjects.length} {t("common.projects")} {t("common.of")}{" "}
+          {pagination.totalCount} {t("common.total")}
           {(searchTerm ||
             selectedDepartment !== "all" ||
             selectedStatus !== "all") && (
             <span className="text-blue-600">
               {" "}
-              (filtré de {projects.length} projets)
+              ({t("common.filteredFrom")} {projects.length} {t("common.projects")})
             </span>
           )}
         </div>
@@ -371,14 +400,6 @@ export default function ProjectsPage() {
         />
       </div>
 
-      {/* Edit modal */}
-      {editingProject && (
-        <EditProjectForm
-          project={editingProject}
-          onSave={handleSave}
-          onClose={() => setEditingProject(null)}
-        />
-      )}
       {/* View modal */}
       {viewingProject && (
         <ViewProjectForm

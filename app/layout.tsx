@@ -2,16 +2,32 @@
 
 import type React from "react"
 import type { Metadata } from "next"
-import { GeistSans } from "geist/font/sans"
-import { GeistMono } from "geist/font/mono"
+import { Inter, IBM_Plex_Mono } from "next/font/google"
 import "./globals.css"
 import { Header } from "@/components/layout/header"
 import { Navigation } from "@/components/layout/navigation"
 import { AuthProvider } from "@/lib/auth-context"
 import { AuthGuard } from "@/components/auth/auth-guard"
+import { LanguageProvider } from "@/lib/language-context"
+import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster"
 import { usePathname } from "next/navigation"
 import { useEffect } from "react"
 
+
+// Notion-like typography: Inter for sans and IBM Plex Mono for code, mapped to existing CSS variables
+const InterSans = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-geist-sans",
+})
+
+const PlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-geist-mono",
+})
 
 
 export default function RootLayout({
@@ -20,11 +36,22 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="fr">
-      <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
-        <AuthProvider>
-          <AuthGuardWrapper>{children}</AuthGuardWrapper>
-        </AuthProvider>
+    <html lang="fr" suppressHydrationWarning>
+      <body className={`font-sans ${InterSans.variable} ${PlexMono.variable}`}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <LanguageProvider>
+            <AuthProvider>
+              <AuthGuardWrapper>{children}</AuthGuardWrapper>
+            </AuthProvider>
+          </LanguageProvider>
+        </ThemeProvider>
+        {/* Global toast container */}
+        <Toaster />
       </body>
     </html>
   )

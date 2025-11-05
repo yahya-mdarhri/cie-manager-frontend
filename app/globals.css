@@ -122,6 +122,24 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01" 1, "ss02" 1, "cv05" 1; /* subtle stylistic sets like Notion */
+    font-size: 15px; /* slightly smaller, dense but readable like Notion */
+    line-height: 1.6;
+    letter-spacing: 0.005em;
   }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-foreground;
+    letter-spacing: -0.01em;
+  }
+  h1 { font-weight: 700; line-height: 1.2; }
+  h2 { font-weight: 700; line-height: 1.25; }
+  h3 { font-weight: 600; line-height: 1.3; }
+  h4 { font-weight: 600; line-height: 1.35; }
+  h5 { font-weight: 600; line-height: 1.4; }
+  h6 { font-weight: 600; line-height: 1.45; }
+
+  p { margin: 0.25rem 0; }
+  small { opacity: 0.85; }
 }

@@ -11,14 +11,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/lib/auth-context"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-
+import { useLanguage } from "@/lib/language-context"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
+import { LanguageToggle } from "@/components/ui/language-toggle"
 import { ProfileDialog } from "@/components/ui/profile-dialog"
 import { SettingsDialog } from "@/components/ui/settings-dialog"
 import Image from "next/image"
 
 export function Header() {
   const { user, logout } = useAuth()
+  const { t } = useLanguage()
   const [profileOpen, setProfileOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -52,7 +55,11 @@ export function Header() {
 
           {/* Right side actions */}
           <div className="flex items-center gap-2">
-    
+            {/* Theme Toggle */}
+            <ThemeToggle />
+            
+            {/* Language Toggle */}
+            <LanguageToggle />
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -63,6 +70,9 @@ export function Header() {
                     className="flex items-center gap-2 h-10"
                   >
                     <Avatar className="h-8 w-8">
+                      {user?.avatarUrl ? (
+                        <AvatarImage src={user.avatarUrl} alt={user.name} />
+                      ) : null}
                       <AvatarFallback className="bg-primary text-primary-foreground text-sm">
                         {user ? getUserInitials(user.name) : "U"}
                       </AvatarFallback>
@@ -82,6 +92,9 @@ export function Header() {
               <DropdownMenuContent align="end" className="w-56">
                 <div className="flex items-center gap-2 p-2">
                   <Avatar className="h-8 w-8">
+                    {user?.avatarUrl ? (
+                      <AvatarImage src={user.avatarUrl} alt={user.name} />
+                    ) : null}
                     <AvatarFallback className="bg-primary text-primary-foreground text-sm">
                       {user ? getUserInitials(user.name) : "U"}
                     </AvatarFallback>
@@ -94,16 +107,16 @@ export function Header() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setProfileOpen(true)}>
                   <UserCircle className="mr-2 h-4 w-4" />
-                  Profil
+                  {t("header.profile")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
                   <Settings className="mr-2 h-4 w-4" />
-                  Paramètres
+                  {t("header.settings")}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={logout} className="text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
-                  Déconnexion
+                  {t("header.logout")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

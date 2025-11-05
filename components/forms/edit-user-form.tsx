@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Edit, Loader2, Eye, EyeOff } from "lucide-react"
 import { http } from "@/lib/http"
+import { useLanguage } from "@/lib/language-context"
 
 interface EditUserFormProps {
   user: {
@@ -46,6 +47,7 @@ interface UserFormData {
 }
 
 export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [loadingDepartments, setLoadingDepartments] = useState(false)
@@ -91,8 +93,8 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
       const departmentList = response.data?.results || response.data || []
       setDepartments(Array.isArray(departmentList) ? departmentList : [])
     } catch (error) {
-      console.error('Error loading departments:', error)
-      alert("Erreur lors du chargement des départements")
+  console.error('Error loading departments:', error)
+  alert(t("user.errors.loadDepartments"))
     } finally {
       setLoadingDepartments(false)
     }
@@ -103,18 +105,18 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
 
     // Validation
     if (!formData.first_name || !formData.last_name || !formData.username || !formData.email) {
-      alert("Veuillez remplir tous les champs obligatoires")
+      alert(t("user.errors.requiredFields"))
       return
     }
 
     // Password validation (only if password is provided)
     if (formData.password && formData.password.trim()) {
       if (formData.password !== formData.confirmPassword) {
-        alert("Les mots de passe ne correspondent pas")
+        alert(t("user.errors.passwordMismatch"))
         return
       }
       if (formData.password.length < 6) {
-        alert("Le mot de passe doit contenir au moins 6 caractères")
+        alert(t("user.errors.passwordTooShort"))
         return
       }
     }
@@ -161,7 +163,7 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
           }
         }
 
-        alert("Utilisateur mis à jour avec succès")
+        alert(t("user.updateSuccess"))
         setOpen(false)
         if (onUpdated) {
           onUpdated()
@@ -174,7 +176,7 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
         error.response?.data?.username?.[0] ||
         error.response?.data?.detail ||
         error.message ||
-        "Erreur lors de la mise à jour de l'utilisateur"
+        t("user.errors.update")
       alert(errorMessage)
     } finally {
       setLoading(false)
@@ -198,9 +200,9 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
 
   const getRoleBadge = (role: string) => {
     const roleMap: Record<string, { label: string; variant: any }> = {
-      director: { label: "Directeur", variant: "default" },
-      department_manager: { label: "Manager", variant: "secondary" },
-      user: { label: "Utilisateur", variant: "outline" }
+      director: { label: t("roles.director"), variant: "default" },
+      department_manager: { label: t("roles.department_manager"), variant: "secondary" },
+      user: { label: t("roles.user"), variant: "outline" }
     }
     const roleInfo = roleMap[role] || { label: role, variant: "outline" }
     return <Badge variant={roleInfo.variant}>{roleInfo.label}</Badge>
@@ -219,7 +221,7 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Edit className="h-5 w-5" />
-            Modifier l'utilisateur
+            {t("user.editTitle")}
           </DialogTitle>
         </DialogHeader>
 
@@ -227,25 +229,25 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
           {/* User Info Display */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Informations actuelles</CardTitle>
+              <CardTitle className="text-lg">{t("user.currentInfo")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Nom complet:</span>
+                <span className="text-sm text-muted-foreground">{t("user.fullName")}:</span>
                 <span className="font-medium">{user.first_name} {user.last_name}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Email:</span>
+                <span className="text-sm text-muted-foreground">{t("user.email")}:</span>
                 <span className="font-medium">{user.email}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Rôle:</span>
+                <span className="text-sm text-muted-foreground">{t("user.role")}:</span>
                 {getRoleBadge(user.role)}
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Département:</span>
+                <span className="text-sm text-muted-foreground">{t("user.department")}:</span>
                 <span className="font-medium">
-                  {user.department ? user.department.name : "Aucun"}
+                  {user.department ? user.department.name : t("admin.noDepartment")}
                 </span>
               </div>
             </CardContent>
@@ -254,29 +256,29 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
           {/* Edit Form */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Informations personnelles</CardTitle>
+              <CardTitle className="text-lg">{t("user.personalInfo")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="first_name">Prénom *</Label>
+                  <Label htmlFor="first_name">{t("user.firstName")} *</Label>
                   <Input
                     id="first_name"
                     value={formData.first_name}
                     onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
-                    placeholder="Prénom"
+                    placeholder={t("user.firstName")}
                     required
                     disabled={loading}
                   />
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="last_name">Nom *</Label>
+                  <Label htmlFor="last_name">{t("user.lastName")} *</Label>
                   <Input
                     id="last_name"
                     value={formData.last_name}
                     onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
-                    placeholder="Nom de famille"
+                    placeholder={t("user.lastNamePlaceholder")}
                     required
                     disabled={loading}
                   />
@@ -285,25 +287,25 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username">Nom d'utilisateur *</Label>
+                  <Label htmlFor="username">{t("user.username")} *</Label>
                   <Input
                     id="username"
                     value={formData.username}
                     onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
-                    placeholder="nom.utilisateur"
+                    placeholder={t("user.usernamePlaceholder")}
                     required
                     disabled={loading}
                   />
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
+                  <Label htmlFor="email">{t("user.email")} *</Label>
                   <Input
                     id="email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    placeholder="email@example.com"
+                    placeholder={t("user.emailPlaceholder")}
                     required
                     disabled={loading}
                   />
@@ -315,38 +317,38 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
           {/* Role and Department */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Rôle et Département</CardTitle>
+              <CardTitle className="text-lg">{t("user.roleDepartment")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="role">Rôle</Label>
+                  <Label htmlFor="role">{t("user.role")}</Label>
                   <Select 
                     value={formData.role} 
                     onValueChange={(value) => setFormData(prev => ({ ...prev, role: value }))}
                     disabled={loading}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner un rôle" />
+                      <SelectValue placeholder={t("user.selectRole")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="user">Utilisateur</SelectItem>
-                      <SelectItem value="department_manager">Manager de Département</SelectItem>
-                      <SelectItem value="director">Directeur</SelectItem>
+                      <SelectItem value="user">{t("roles.user")}</SelectItem>
+                      <SelectItem value="department_manager">{t("roles.department_manager")}</SelectItem>
+                      <SelectItem value="director">{t("roles.director")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 {formData.role === "department_manager" && (
                   <div className="space-y-2">
-                    <Label htmlFor="department">Département</Label>
+                    <Label htmlFor="department">{t("user.department")}</Label>
                     <Select 
                       value={formData.departmentId} 
                       onValueChange={(value) => setFormData(prev => ({ ...prev, departmentId: value }))}
                       disabled={loading || loadingDepartments}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner un département" />
+                        <SelectValue placeholder={t("form.project.selectDepartment")} />
                       </SelectTrigger>
                       <SelectContent>
                         {departments.map((dept) => (
@@ -357,7 +359,7 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
                       </SelectContent>
                     </Select>
                     {loadingDepartments && (
-                      <p className="text-sm text-muted-foreground">Chargement des départements...</p>
+                      <p className="text-sm text-muted-foreground">{t("user.loadingDepartments")}</p>
                     )}
                   </div>
                 )}
@@ -368,19 +370,19 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
           {/* Password Section */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Changer le mot de passe (optionnel)</CardTitle>
+              <CardTitle className="text-lg">{t("user.changePasswordOptional")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="password">Nouveau mot de passe</Label>
+                  <Label htmlFor="password">{t("user.newPassword")}</Label>
                   <div className="relative">
                     <Input
                       id="password"
                       type={showPassword ? "text" : "password"}
                       value={formData.password}
                       onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder="Laisser vide pour ne pas changer"
+                      placeholder={t("user.leaveEmpty")}
                       disabled={loading}
                     />
                     <button
@@ -396,19 +398,19 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
                     </button>
                   </div>
                   {formData.password && formData.password.length > 0 && formData.password.length < 6 && (
-                    <p className="text-sm text-red-600">Le mot de passe doit contenir au moins 6 caractères</p>
+                    <p className="text-sm text-red-600">{t("user.errors.passwordTooShort")}</p>
                   )}
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
+                  <Label htmlFor="confirmPassword">{t("user.confirmPassword")}</Label>
                   <div className="relative">
                     <Input
                       id="confirmPassword"
                       type={showConfirmPassword ? "text" : "password"}
                       value={formData.confirmPassword}
                       onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                      placeholder="Confirmer le nouveau mot de passe"
+                      placeholder={t("user.confirmNewPassword")}
                       disabled={loading || !formData.password}
                     />
                     <button
@@ -425,14 +427,14 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
                     </button>
                   </div>
                   {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (
-                    <p className="text-sm text-red-600">Les mots de passe ne correspondent pas</p>
+                    <p className="text-sm text-red-600">{t("user.errors.passwordMismatch")}</p>
                   )}
                 </div>
               </div>
               
               <div className="text-sm text-muted-foreground">
-                <p>• Laissez les champs vides pour conserver le mot de passe actuel</p>
-                <p>• Le mot de passe doit contenir au moins 6 caractères</p>
+                <p>• {t("user.passwordHints.line1")}</p>
+                <p>• {t("user.passwordHints.line2")}</p>
               </div>
             </CardContent>
           </Card>
@@ -445,7 +447,7 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
               onClick={handleCancel}
               disabled={loading}
             >
-              Annuler
+              {t("common.cancel")}
             </Button>
             <Button
               type="submit"
@@ -455,12 +457,12 @@ export function EditUserForm({ user, onUpdated, trigger }: EditUserFormProps) {
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Mise à jour...
+                  {t("user.updating")}
                 </>
               ) : (
                 <>
                   <Edit className="h-4 w-4" />
-                  Mettre à jour
+                  {t("user.update")}
                 </>
               )}
             </Button>

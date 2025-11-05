@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { http } from "@/lib/http"
+import { useLanguage } from "@/lib/language-context"
 import { Users } from "lucide-react"
 
 interface Manager {
@@ -49,6 +50,7 @@ export default function AssignManagersForm({
   trigger,
 }: AssignManagersFormProps) {
   const [open, setOpen] = useState(false)
+  const { t } = useLanguage()
   const [managers, setManagers] = useState<Manager[]>([])
   const [selectedManagerIds, setSelectedManagerIds] = useState<number[]>([])
   const [loadingManagers, setLoadingManagers] = useState(false)
@@ -95,7 +97,7 @@ export default function AssignManagersForm({
         err.response?.data?.detail ||
         err.response?.data?.error ||
         err.message ||
-        "Erreur lors du chargement des managers"
+        t('assignManagers.errorPrefix') + ": " + t('assignManagers.loading')
       )
     } finally {
       setLoadingManagers(false)
@@ -118,16 +120,16 @@ export default function AssignManagersForm({
     setError(null)
 
     try {
-      // Get the selected managers' data
-      const assignedManagers = managers.filter(m => 
-        selectedManagerIds.includes(m.id)
-      )
+      // Get the selected managers' IDs
+      const assignedManagerIds = managers
+        .filter(m => selectedManagerIds.includes(m.id))
+        .map(m => m.id)
 
       // Update department with assigned managers via PUT
       await http.put(`/api/management/departments/${department.id}/`, {
         name: department.name,
         description: department.description,
-        managers: assignedManagers.map(m => m.id),
+        manager_ids: assignedManagerIds,  // Changed from 'managers' to 'manager_ids'
       })
 
       // Update local state with assigned managers
@@ -150,12 +152,12 @@ export default function AssignManagersForm({
   const getSelectedManagerNames = () => {
     const selected = managers.filter(m => selectedManagerIds.includes(m.id))
     if (selected.length === 0) {
-      return "Aucun manager"
+      return t('assignManagers.none')
     }
     if (selected.length === 1) {
       return `${selected[0].first_name} ${selected[0].last_name}`
     }
-    return `${selected.length} managers`
+    return t('assignManagers.count', { count: selected.length })
   }
 
   return (
@@ -169,9 +171,9 @@ export default function AssignManagersForm({
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Assigner des Managers</DialogTitle>
+          <DialogTitle>{t('assignManagers.title')}</DialogTitle>
           <DialogDescription>
-            Sélectionnez les managers à assigner à <strong>{department.name}</strong>
+            {t('assignManagers.description', { name: department.name })}
           </DialogDescription>
         </DialogHeader>
 
@@ -184,15 +186,13 @@ export default function AssignManagersForm({
         <form onSubmit={handleSubmit} className="space-y-4">
           {loadingManagers ? (
             <div className="flex items-center justify-center py-8">
-              <p className="text-muted-foreground">Chargement des managers...</p>
+              <p className="text-muted-foreground">{t('assignManagers.loading')}</p>
             </div>
           ) : managers.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 space-y-2">
-              <p className="text-muted-foreground">
-                Aucun manager disponible. Créez d'abord des managers.
-              </p>
+              <p className="text-muted-foreground">{t('assignManagers.noneAvailable')}</p>
               {error && (
-                <p className="text-xs text-red-600">Erreur: {error}</p>
+                <p className="text-xs text-red-600">{t('assignManagers.errorPrefix')}: {error}</p>
               )}
             </div>
           ) : (
@@ -230,9 +230,7 @@ export default function AssignManagersForm({
 
           {managers.length > 0 && (
             <div className="bg-muted p-3 rounded-md">
-              <p className="text-sm font-medium">
-                Managers sélectionnés: <strong>{selectedManagerIds.length}</strong>
-              </p>
+              <p className="text-sm font-medium">{t('assignManagers.selected')}: <strong>{selectedManagerIds.length}</strong></p>
               {selectedManagerIds.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {managers
@@ -254,10 +252,10 @@ export default function AssignManagersForm({
               onClick={() => setOpen(false)}
               disabled={submitting}
             >
-              Annuler
+              {t('assignManagers.cancel')}
             </Button>
             <Button type="submit" disabled={submitting || loadingManagers}>
-              {submitting ? "Assignation..." : "Assigner"}
+              {submitting ? t('assignManagers.assigning') : t('assignManagers.assign')}
             </Button>
           </div>
         </form>

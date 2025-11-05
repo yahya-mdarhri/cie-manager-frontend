@@ -6,76 +6,9 @@ import { DataTable } from "@/components/ui/data-table";
 import { Pagination } from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/language-context";
 import { usePagination } from "@/hooks/use-pagination";
 import { http } from "@/lib/http";
-
-const filterFields = [
-  {
-    type: "date" as const,
-    key: "startDate",
-    label: "Date de début",
-    placeholder: "dd/mm/yyyy",
-  },
-  {
-    type: "date" as const,
-    key: "endDate",
-    label: "Date de fin",
-    placeholder: "dd/mm/yyyy",
-  },
-  {
-    type: "select" as const,
-    key: "department",
-    label: "Département",
-    placeholder: "Tous",
-    options: [
-      { value: "all", label: "Tous" },
-      { value: "CIE Direct", label: "CIE Direct" },
-      { value: "Tech Center", label: "Tech Center" },
-      { value: "TTO", label: "TTO" },
-      { value: "Clinique Industrielle", label: "Clinique Industrielle" },
-    ],
-  },
-  {
-    type: "select" as const,
-    key: "coordinator",
-    label: "Coordinateur",
-    placeholder: "Tous",
-    options: [
-      { value: "all", label: "Tous" },
-      { value: "Omar Jebbouri", label: "Omar Jebbouri" },
-      { value: "Wacim Benyahya", label: "Wacim Benyahya" },
-      { value: "Bertrand Denise", label: "Bertrand Denise" },
-    ],
-  },
-  {
-    type: "select" as const,
-    key: "category",
-    label: "Catégorie",
-    placeholder: "Toutes",
-    options: [
-      { value: "all", label: "Toutes" },
-      { value: "personnel", label: "Personnel" },
-      { value: "equipment", label: "Équipement" },
-      { value: "subcontracting", label: "Sous-traitance" },
-      { value: "material", label: "Matériel" },
-      { value: "consumables", label: "Consommable" },
-      { value: "other", label: "Autre" },
-    ],
-  },
-];
-
-const columns = [
-  { key: "project", label: "Projet" },
-  { key: "code", label: "Code Projet" },
-  { key: "date", label: "Date" },
-  {
-    key: "amount",
-    label: "Montant",
-    className: "text-right font-medium text-blue-600",
-  },
-  { key: "category", label: "Catégorie" },
-  { key: "supplier", label: "Fournisseur" },
-];
 
 async function fetchExpensesForUser(
   user: { role: string; department?: string | number | null },
@@ -193,11 +126,81 @@ async function fetchExpensesForUser(
 
 export default function ExpensesPage() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const { pagination, goToPage, updateFromResponse } = usePagination(10);
   const [rows, setRows] = useState<any[]>([]);
   const [allRows, setAllRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
+
+  // Define filterFields and columns here with translations
+  const filterFields = [
+    {
+      type: "date" as const,
+      key: "startDate",
+      label: t("expenses.startDate"),
+      placeholder: "dd/mm/yyyy",
+    },
+    {
+      type: "date" as const,
+      key: "endDate",
+      label: t("expenses.endDate"),
+      placeholder: "dd/mm/yyyy",
+    },
+    {
+      type: "select" as const,
+      key: "department",
+      label: t("expenses.department"),
+      placeholder: t("expenses.all"),
+      options: [
+        { value: "all", label: t("expenses.all") },
+        { value: "CIE Direct", label: t("departments.cie") },
+        { value: "Tech Center", label: t("departments.tech") },
+        { value: "TTO", label: t("departments.tto") },
+        { value: "Clinique Industrielle", label: t("departments.clinique") },
+      ],
+    },
+    {
+      type: "select" as const,
+      key: "coordinator",
+      label: t("expenses.coordinator"),
+      placeholder: t("expenses.all"),
+      options: [
+        { value: "all", label: t("expenses.all") },
+        { value: "Omar Jebbouri", label: "Omar Jebbouri" },
+        { value: "Wacim Benyahya", label: "Wacim Benyahya" },
+        { value: "Bertrand Denise", label: "Bertrand Denise" },
+      ],
+    },
+    {
+      type: "select" as const,
+      key: "category",
+      label: t("expenses.category"),
+      placeholder: t("expenses.allCategories"),
+      options: [
+        { value: "all", label: t("expenses.allCategories") },
+        { value: "personnel", label: t("expenses.categories.personnel") },
+        { value: "equipment", label: t("expenses.categories.equipment") },
+        { value: "subcontracting", label: t("expenses.categories.subcontracting") },
+        { value: "material", label: t("expenses.categories.material") },
+        { value: "consumables", label: t("expenses.categories.consumables") },
+        { value: "other", label: t("expenses.categories.other") },
+      ],
+    },
+  ];
+
+  const columns = [
+    { key: "project", label: t("expenses.project") },
+    { key: "code", label: t("expenses.projectCode") },
+    { key: "date", label: t("expenses.date") },
+    {
+      key: "amount",
+      label: t("expenses.amount"),
+      className: "text-right font-medium text-blue-600",
+    },
+    { key: "category", label: t("expenses.category") },
+    { key: "supplier", label: t("expenses.supplier") },
+  ];
 
   const applyFilters = (
     data: any[],
@@ -334,10 +337,10 @@ export default function ExpensesPage() {
     currency: "MAD",
   });
   const summary = [
-    { label: "Total Dépenses", value: String(rows.length) },
-    { label: "Montant Total", value: totalAmountStr },
+    { label: t("expenses.totalExpenses"), value: String(rows.length) },
+    { label: t("expenses.totalAmount"), value: totalAmountStr },
     {
-      label: "Projets Impliqués",
+      label: t("expenses.projectsInvolved"),
       value: String(new Set(rows.map((r) => r.code)).size),
     },
   ];
@@ -346,23 +349,23 @@ export default function ExpensesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-foreground">
-          Gestion des Dépenses
+          {t("expenses.title")}
         </h1>
         <p className="text-muted-foreground">
-          Suivi et analyse des dépenses par projet
+          {t("expenses.subtitle")}
         </p>
       </div>
 
       {/* Hide department filter for department managers (they only see their own dept) */}
       <FilterBar
-        fields={user?.role === "department_manager" ? filterFields.filter(f => f.key !== "department") : filterFields}
+        fields={user?.role === "department_manager" ? filterFields.filter((f: any) => f.key !== "department") : filterFields}
         onFilter={handleFilter}
         onReset={handleReset}
         initialFilters={filters}
       />
 
       <DataTable
-        title="Liste des Dépenses"
+        title={t("expenses.list")}
         columns={columns}
         data={rows}
         summary={summary}
@@ -373,13 +376,13 @@ export default function ExpensesPage() {
       {/* Pagination */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Affichage de {rows.length} dépense(s) sur {pagination.totalCount}{" "}
-          total
+          {t("common.showing")} {rows.length} {t("expenses.expenseCount")} {t("common.of")} {pagination.totalCount}{" "}
+          {t("common.total")}
           {Object.keys(filters).some(
             (key) => filters[key] && filters[key] !== "all",
           ) && (
             <span className="text-blue-600 ml-2">
-              (filtré de {allRows.length} dépenses)
+              ({t("common.filteredFrom")} {allRows.length} {t("expenses.expenseCount")})
             </span>
           )}
         </div>

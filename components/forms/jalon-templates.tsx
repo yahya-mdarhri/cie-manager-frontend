@@ -1,6 +1,7 @@
 "use client"
 
 import React from "react"
+import { useLanguage } from "@/lib/language-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -152,6 +153,7 @@ const priorityIcons = {
 
 export default function JalonTemplates({ onSelectTemplates, children }: JalonTemplatesProps) {
   const [open, setOpen] = React.useState(false)
+  const { t } = useLanguage()
   
   const handleSelectTemplate = (templateKey: string) => {
     const templates = predefinedTemplates[templateKey]
@@ -169,7 +171,7 @@ export default function JalonTemplates({ onSelectTemplates, children }: JalonTem
         {children || (
           <Button variant="outline" className="flex items-center gap-2">
             <Lightbulb className="h-4 w-4" />
-            Utiliser un modèle
+            {t("jalon.templates.trigger")}
           </Button>
         )}
       </DialogTrigger>
@@ -177,10 +179,10 @@ export default function JalonTemplates({ onSelectTemplates, children }: JalonTem
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Lightbulb className="h-5 w-5" />
-            Modèles de jalons prédéfinis
+            {t("jalon.templates.title")}
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Sélectionnez un modèle adapté à votre type de projet pour gagner du temps
+            {t("jalon.templates.helper")}
           </p>
         </DialogHeader>
         
@@ -193,14 +195,14 @@ export default function JalonTemplates({ onSelectTemplates, children }: JalonTem
                     <CardTitle className="text-lg">{templateName}</CardTitle>
                     <div className="flex items-center gap-4">
                       <div className="text-sm text-gray-500">
-                        {templates.length} jalons • {calculateTotalDuration(templates)} jours
+                        {t("jalon.templates.groupStats", { count: templates.length, days: calculateTotalDuration(templates) })}
                       </div>
                       <Button
                         onClick={() => handleSelectTemplate(templateName)}
                         size="sm"
                       >
                         <Plus className="h-4 w-4 mr-2" />
-                        Utiliser ce modèle
+                        {t("jalon.templates.useThisTemplate")}
                       </Button>
                     </div>
                   </div>
@@ -216,17 +218,17 @@ export default function JalonTemplates({ onSelectTemplates, children }: JalonTem
                           <div className="flex items-center gap-2 mb-1">
                             <h4 className="font-medium text-gray-900">{template.name}</h4>
                             <Badge className={categoryColors[template.category]}>
-                              {template.category}
+                              {t(`jalon.templates.categories.${template.category}`)}
                             </Badge>
                             <div className="flex items-center gap-1">
                               {priorityIcons[template.priority]}
-                              <span className="text-xs text-gray-500">{template.priority}</span>
+                              <span className="text-xs text-gray-500">{t(`jalon.templates.priority.${template.priority}`)}</span>
                             </div>
                           </div>
                           <p className="text-sm text-gray-600 mb-2">{template.description}</p>
                           <div className="flex items-center gap-2 text-xs text-gray-500">
                             <Clock className="h-3 w-3" />
-                            <span>Durée estimée: {template.durationDays} jours</span>
+                            <span>{t("jalon.templates.estimatedDuration", { days: template.durationDays })}</span>
                           </div>
                         </div>
                       </div>

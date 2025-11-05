@@ -15,29 +15,20 @@ import { Separator } from "@/components/ui/separator"
 import { Plus, Upload, ChevronDown, ChevronRight, Info, Calendar, Clock, Trash2 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { http } from "@/lib/http"
+import { useLanguage } from "@/lib/language-context"
 
 interface NewProjectFormProps {
   children: React.ReactNode
   onCreated?: () => void
 }
 
-const timelineSteps = [
-  "Date d'Approbation de Besoin & Étude Préliminaire",
-  "Début du Bon de Commande Client",
-  "Date de Signature",
-  "Date de Validation du Contrôle de Gestion",
-  "Date de la Création de la Demande d'Achat",
-  "Demande d'Achat",
-  "Date d'Envoi Bon de Commande UB",
-  "Date de Livraison UB",
-  "Date de Facturation",
-  "Date d'Encaissement",
-  "Date de fin du projet (définitif)",
-]
+const timelineIndexes = Array.from({ length: 11 }, (_, i) => i)
 
 export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
+  const { t } = useLanguage()
   const { user } = useAuth()
   const [open, setOpen] = useState(false)
+  const [showDates, setShowDates] = useState(false)
   const [expandedSteps, setExpandedSteps] = useState<number[]>([])
   const [formData, setFormData] = useState({
     code: "",
@@ -186,7 +177,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
         departmentId = Number(formData.department || 0)
       }
       if (!departmentId) {
-        throw new Error("Département introuvable")
+        throw new Error(t("form.project.departmentNotFound"))
       }
 
       const fd = new FormData()
@@ -199,7 +190,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
       const clientPoStr = toDate(formData.timeline[1])
       const endDateStr = toDate(formData.timeline[10])
       if (!needsExprStr || !clientPoStr || !endDateStr) {
-        throw new Error("Veuillez sélectionner les dates requises (Besoin, PO Client, Fin du projet)")
+        throw new Error(t("form.project.requiredDatesError"))
       }
       fd.append("needs_expression_date", needsExprStr)
       fd.append("client_po_date", clientPoStr)
@@ -290,7 +281,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
               <Plus className="h-4 w-4 text-primary-foreground" />
             </div>
-            <DialogTitle className="text-xl font-semibold">Nouveau Projet</DialogTitle>
+            <DialogTitle className="text-xl font-semibold">{t("form.project.title")}</DialogTitle>
           </div>
         </DialogHeader>
 
@@ -298,12 +289,12 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
           <form onSubmit={handleSubmit} className="p-6 space-y-8">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Informations Générales</CardTitle>
+                <CardTitle className="text-lg">{t("form.project.generalInfo")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="code">Code Projet*</Label>
+                    <Label htmlFor="code">{t("form.project.code")}</Label>
                     <Input
                       id="code"
                       value={formData.code}
@@ -312,7 +303,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="name">Nom du Projet*</Label>
+                    <Label htmlFor="name">{t("form.project.name")}</Label>
                     <Input
                       id="name"
                       value={formData.name}
@@ -321,14 +312,14 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="department">Département*</Label>
+                    <Label htmlFor="department">{t("form.project.department")}</Label>
                     <Select
                       value={formData.department}
                       onValueChange={(value) => setFormData((prev) => ({ ...prev, department: value }))}
                       disabled={user?.role === "department_manager"}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner le département" />
+                        <SelectValue placeholder={t("form.project.selectDepartment")} />
                       </SelectTrigger>
                       <SelectContent>
                         {departments.map((d) => (
@@ -340,13 +331,13 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="coordinator">Coordinateur*</Label>
+                    <Label htmlFor="coordinator">{t("form.project.coordinator")}</Label>
                     <Select
                       value={formData.coordinator}
                       onValueChange={(value) => setFormData((prev) => ({ ...prev, coordinator: value }))}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner coordinateur" />
+                        <SelectValue placeholder={t("form.project.selectCoordinator")} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Omar Jebbouri">Omar Jebbouri</SelectItem>
@@ -356,13 +347,13 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="nature">Nature du Projet*</Label>
+                    <Label htmlFor="nature">{t("form.project.nature")}</Label>
                     <Select
                       value={formData.nature}
                       onValueChange={(value) => setFormData((prev) => ({ ...prev, nature: value }))}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner la nature" />
+                        <SelectValue placeholder={t("form.project.selectNature")} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Purchase Order">Purchase Order</SelectItem>
@@ -373,7 +364,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="client">Nom du Client*</Label>
+                    <Label htmlFor="client">{t("form.project.client")}</Label>
                     <Input
                       id="client"
                       value={formData.client}
@@ -387,11 +378,11 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Budget</CardTitle>
+                <CardTitle className="text-lg">{t("form.project.budget")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="totalBudget">Budget Total (MAD)*</Label>
+                  <Label htmlFor="totalBudget">{t("form.project.totalBudget")}</Label>
                   <Input
                     id="totalBudget"
                     type="number"
@@ -402,11 +393,11 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                   />
                 </div>
                 <div className="space-y-3">
-                  <Label className="text-sm font-medium">Ventilation du Budget (MAD) (Optionnel)</Label>
+                  <Label className="text-sm font-medium">{t("form.project.budgetBreakdown")}</Label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="personnel" className="text-sm">
-                        Personnel
+                        {t("form.project.personnel")}
                       </Label>
                       <Input
                         id="personnel"
@@ -423,7 +414,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="equipment" className="text-sm">
-                        Équipement
+                        {t("form.project.equipment")}
                       </Label>
                       <Input
                         id="equipment"
@@ -440,7 +431,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="subcontracting" className="text-sm">
-                        Sous-traitance
+                        {t("form.project.subcontracting")}
                       </Label>
                       <Input
                         id="subcontracting"
@@ -457,7 +448,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="material" className="text-sm">
-                        Matériel
+                        {t("form.project.material")}
                       </Label>
                       <Input
                         id="material"
@@ -474,7 +465,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="consumables" className="text-sm">
-                        Consommable
+                        {t("form.project.consumables")}
                       </Label>
                       <Input
                         id="consumables"
@@ -491,7 +482,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="other" className="text-sm">
-                        Autre
+                        {t("form.project.other")}
                       </Label>
                       <Input
                         id="other"
@@ -511,17 +502,25 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
               </CardContent>
             </Card>
 
-            <Card>
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowDates((v) => !v)}>
+                  <Calendar className="h-4 w-4 mr-2" />
+                  {showDates ? t("form.project.hideDates") : t("form.project.setDates")}
+                </Button>
+              </div>
+
+              {showDates && (
+              <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  Timeline du Projet
+                  {t("form.project.timeline")}
                   <Info className="h-4 w-4 text-muted-foreground" />
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <Label className="mb-2 block">Date d'Approbation de Besoin*</Label>
+                    <Label className="mb-2 block">{t("form.project.needsApproval")}*</Label>
                     <Input
                       type="date"
                       value={toInput(formData.timeline[0])}
@@ -533,7 +532,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     />
                   </div>
                   <div>
-                    <Label className="mb-2 block">Date PO Client*</Label>
+                    <Label className="mb-2 block">{t("form.project.clientPO")}*</Label>
                     <Input
                       type="date"
                       value={toInput(formData.timeline[1])}
@@ -545,7 +544,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     />
                   </div>
                   <div>
-                    <Label className="mb-2 block">Date de fin du projet*</Label>
+                    <Label className="mb-2 block">{t("form.project.endDate")}*</Label>
                     <Input
                       type="date"
                       value={toInput(formData.timeline[10])}
@@ -557,14 +556,15 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     />
                   </div>
                 </div>
-                {timelineSteps.map((step, index) => (
+                <p className="text-sm text-muted-foreground">{t("form.project.timelineInfo")}</p>
+                {timelineIndexes.filter((i) => ![0, 1, 10].includes(i)).map((index) => (
                   <div key={index} className="border rounded-lg p-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-semibold text-sm">
                         {index + 1}
                       </div>
                       <div className="flex-1">
-                        <h4 className="font-medium text-sm">{step}</h4>
+                        <h4 className="font-medium text-sm">{t(`form.project.timelineSteps.${index}`)}</h4>
                       </div>
                       <Input
                         type="date"
@@ -585,21 +585,22 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     </div>
                     {expandedSteps.includes(index) && (
                       <div className="mt-3 pl-11">
-                        <Textarea placeholder="Ajouter des informations sur présente" className="min-h-[60px]" />
+                        <Textarea placeholder={t("form.project.timelineNotePlaceholder")} className="min-h-[60px]" />
                       </div>
                     )}
                   </div>
                 ))}
               </CardContent>
-            </Card>
+              </Card>
+              )}
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Description du Projet</CardTitle>
+                <CardTitle className="text-lg">{t("form.project.description")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="description">Description du projet*</Label>
+                  <Label htmlFor="description">{t("form.project.descriptionLabel")}</Label>
                   <Textarea
                     id="description"
                     value={formData.description}
@@ -609,7 +610,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="objective">Objectif du projet*</Label>
+                  <Label htmlFor="objective">{t("form.project.objective")}</Label>
                   <Textarea
                     id="objective"
                     value={formData.objective}
@@ -619,7 +620,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="problems">Problèmes (optionnel)</Label>
+                  <Label htmlFor="problems">{t("form.project.problems")}</Label>
                   <Textarea
                     id="problems"
                     value={formData.problems}
@@ -632,16 +633,16 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Parties prenantes</CardTitle>
+                <CardTitle className="text-lg">{t("form.project.stakeholders")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <Label>Ajouter les parties prenantes</Label>
+                  <Label>{t("form.project.stakeholders")}</Label>
                   <div className="flex gap-2">
-                    <Input placeholder="Nom de la partie prenante" />
+                    <Input placeholder={t("form.project.stakeholderName")} />
                     <Button type="button" size="sm">
                       <Plus className="h-4 w-4" />
-                      Ajouter une partie prenante
+                      {t("form.project.addStakeholder")}
                     </Button>
                   </div>
                 </div>
@@ -652,11 +653,9 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Calendar className="h-5 w-5" />
-                  Jalons du Projet
+                  {t("form.project.milestones")}
                 </CardTitle>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Définissez les étapes clés et les livrables de votre projet avec des dates précises.
-                </p>
+                <p className="text-sm text-muted-foreground mt-2">{t("form.project.milestonesDesc")}</p>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -664,10 +663,10 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                       <div className="flex items-center gap-2">
                         <Info className="h-4 w-4 text-blue-600" />
-                        <span className="text-sm font-medium text-blue-900">Jalons définis: {steps.length}</span>
+                        <span className="text-sm font-medium text-blue-900">{t("form.project.milestonesDefined")}: {steps.length}</span>
                       </div>
                       <span className="text-xs text-blue-600">
-                        {steps.filter(s => s.name && s.description).length} jalon(s) valide(s)
+                        {steps.filter(s => s.name && s.description).length} {t("form.project.milestonesValid")}
                       </span>
                     </div>
                   )}
@@ -676,7 +675,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                     <Card key={idx} className="border-l-4 border-l-blue-500">
                       <CardContent className="p-4 space-y-4">
                         <div className="flex items-center justify-between">
-                          <h4 className="font-medium text-gray-900">Jalon #{idx + 1}</h4>
+                          <h4 className="font-medium text-gray-900">{t("form.project.milestone")} #{idx + 1}</h4>
                           <Button
                             type="button"
                             variant="ghost"
@@ -685,15 +684,15 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                             className="text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
                             <Trash2 className="h-4 w-4 mr-1" />
-                            Supprimer
+                            {t("common.delete")}
                           </Button>
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label className="text-sm font-medium">Nom du jalon *</Label>
+                            <Label className="text-sm font-medium">{t("form.project.milestoneName")}</Label>
                             <Input
-                              placeholder={`Ex: Livraison phase ${idx + 1}`}
+                              placeholder={`${t("form.project.milestoneNamePlaceholder")} ${idx + 1}`}
                               value={st.name}
                               onChange={(e) =>
                                 setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, name: e.target.value } : s)))
@@ -701,29 +700,29 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                               className={!st.name ? "border-red-200 focus:border-red-400" : ""}
                             />
                             {!st.name && (
-                              <p className="text-xs text-red-600">Le nom du jalon est requis</p>
+                              <p className="text-xs text-red-600">{t("form.project.milestoneNameRequired")}</p>
                             )}
                           </div>
                           <div className="space-y-2">
-                            <Label className="text-sm font-medium">Priorité</Label>
+                            <Label className="text-sm font-medium">{t("form.project.milestonePriority")}</Label>
                             <Select defaultValue="Medium">
                               <SelectTrigger>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="Low">🟢 Faible</SelectItem>
-                                <SelectItem value="Medium">🟡 Moyenne</SelectItem>
-                                <SelectItem value="High">🟠 Élevée</SelectItem>
-                                <SelectItem value="Critical">🔴 Critique</SelectItem>
+                                <SelectItem value="Low">{t("form.project.priorityLow")}</SelectItem>
+                                <SelectItem value="Medium">{t("form.project.priorityMedium")}</SelectItem>
+                                <SelectItem value="High">{t("form.project.priorityHigh")}</SelectItem>
+                                <SelectItem value="Critical">{t("form.project.priorityCritical")}</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
                         </div>
                         
                         <div className="space-y-2">
-                          <Label className="text-sm font-medium">Description / Livrables *</Label>
+                          <Label className="text-sm font-medium">{t("form.project.milestoneDescription")}</Label>
                           <Textarea
-                            placeholder="Décrivez les objectifs, livrables et critères d'acceptation de ce jalon..."
+                            placeholder={t("form.project.milestoneDescPlaceholder")}
                             value={st.description}
                             onChange={(e) =>
                               setSteps((prev) =>
@@ -733,7 +732,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                             className={`min-h-[80px] ${!st.description ? "border-red-200 focus:border-red-400" : ""}`}
                           />
                           {!st.description && (
-                            <p className="text-xs text-red-600">La description du jalon est requise</p>
+                            <p className="text-xs text-red-600">{t("form.project.milestoneDescRequired")}</p>
                           )}
                         </div>
                         
@@ -741,7 +740,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                           <div className="space-y-2">
                             <Label className="text-sm font-medium flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
-                              Date de début *
+                              {t("form.project.milestoneStartDate")}
                             </Label>
                             <Input
                               type="date"
@@ -751,16 +750,15 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                                 setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, startDate: date } : s)))
                               }}
                               min={toInput(formData.timeline[0])}
-                              className={!st.startDate ? "border-red-200 focus:border-red-400" : ""}
                             />
                             {!st.startDate && (
-                              <p className="text-xs text-red-600">La date de début est requise</p>
+                              <p className="text-xs text-gray-500">{t("form.project.milestoneDateHint")}</p>
                             )}
                           </div>
                           <div className="space-y-2">
                             <Label className="text-sm font-medium flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
-                              Date de fin *
+                              {t("form.project.milestoneEndDate")}
                             </Label>
                             <Input
                               type="date"
@@ -771,14 +769,13 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                               }}
                               min={st.startDate ? toInput(st.startDate) : toInput(formData.timeline[0])}
                               max={toInput(formData.timeline[10])}
-                              className={!st.endDate ? "border-red-200 focus:border-red-400" : ""}
                             />
                             {!st.endDate && (
-                              <p className="text-xs text-red-600">La date de fin est requise</p>
+                              <p className="text-xs text-gray-500">{t("form.project.milestoneDateHint")}</p>
                             )}
                             {formData.timeline[10] && (
                               <p className="text-xs text-gray-500">
-                                Date limite: {toInput(formData.timeline[10])}
+                                {t("form.project.milestoneDateLimit")}: {toInput(formData.timeline[10])}
                               </p>
                             )}
                           </div>
@@ -788,7 +785,9 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                           <div className="p-3 bg-gray-50 rounded-lg">
                             <div className="flex items-center gap-2 text-sm text-gray-700">
                               <Clock className="h-4 w-4" />
-                              <span>Durée estimée: {Math.ceil((st.endDate.getTime() - st.startDate.getTime()) / (1000 * 60 * 60 * 24))} jours</span>
+                              <span>
+                                {t("form.project.milestoneDuration")}: {Math.ceil((st.endDate.getTime() - st.startDate.getTime()) / (1000 * 60 * 60 * 24))} {t("form.project.milestoneDays")}
+                              </span>
                             </div>
                           </div>
                         )}
@@ -809,7 +808,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                       className="flex items-center justify-center gap-2"
                     >
                       <Plus className="h-4 w-4" />
-                      Ajouter un jalon
+                      {t("form.project.addMilestone")}
                     </Button>
                     
                     {steps.length > 0 && (
@@ -820,7 +819,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                           const projectStart = formData.timeline[0]
                           const projectEnd = formData.timeline[10]
                           if (!projectStart || !projectEnd) {
-                            alert("Veuillez d'abord définir les dates de début et fin du projet")
+                            alert(t("form.project.generateDatesError"))
                             return
                           }
                           
@@ -837,7 +836,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                         className="flex items-center justify-center gap-2"
                       >
                         <Calendar className="h-4 w-4" />
-                        Générer les dates automatiquement
+                        {t("form.project.generateDates")}
                       </Button>
                     )}
                   </div>
@@ -845,10 +844,8 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                   {steps.length === 0 && (
                     <div className="text-center p-8 border-2 border-dashed border-gray-200 rounded-lg">
                       <Calendar className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun jalon défini</h3>
-                      <p className="text-gray-500 mb-4">
-                        Les jalons vous aident à suivre l'avancement de votre projet et à respecter les échéances importantes.
-                      </p>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">{t("form.project.noMilestones")}</h3>
+                      <p className="text-gray-500 mb-4">{t("form.project.noMilestonesDesc")}</p>
                       <Button
                         type="button"
                         onClick={() =>
@@ -856,7 +853,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                         }
                       >
                         <Plus className="h-4 w-4 mr-2" />
-                        Créer le premier jalon
+                        {t("form.project.createFirstMilestone")}
                       </Button>
                     </div>
                   )}
@@ -866,16 +863,15 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Documents Contractuels</CardTitle>
+                <CardTitle className="text-lg">{t("form.project.documents")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <Label>Documents (PDF Requis)</Label>
+                  <Label>{t("form.project.documentsLabel")}</Label>
                   <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center">
                     <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Glissez vos fichiers ici ou cliquez pour sélectionner
-                    </p>
+                    <p className="text-sm text-muted-foreground mb-2">{t("form.project.uploadText")}</p>
+                    <p className="text-xs text-muted-foreground mb-2">{t("form.project.uploadFormat")}</p>
                     <input
                       type="file"
                       accept="application/pdf"
@@ -890,10 +886,10 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
 
             <div className="flex items-center justify-end gap-3 pt-4">
               <Button type="button" onClick={() => setOpen(false)}>
-                Annuler
+                {t("form.project.cancel")}
               </Button>
               <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isSubmitting}>
-                {isSubmitting ? "Enregistrement..." : "Enregistrer le projet"}
+                {isSubmitting ? t("form.project.saving") : t("form.project.save")}
               </Button>
             </div>
           </form>

@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { useLanguage } from "@/lib/language-context"
 
 export default function EditProjectForm({
   project,
@@ -21,6 +22,7 @@ export default function EditProjectForm({
   onSave: (updated: any) => void
   onClose: () => void
 }) {
+  const { t } = useLanguage()
   const { user } = useAuth()
   const [formData, setFormData] = useState({ ...project })
 
@@ -32,37 +34,37 @@ export default function EditProjectForm({
     <Dialog open={!!project} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Modifier le projet</DialogTitle>
+          <DialogTitle>{t("form.project.edit")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <Input
             name="name"
             value={formData.name}
             onChange={handleChange}
-            placeholder="Nom du projet"
+            placeholder={t("projects.name")}
           />
           <Input
             name="coordinator"
             value={formData.coordinator}
             onChange={handleChange}
-            placeholder="Coordinateur"
+            placeholder={t("projects.coordinator")}
           />
           <Input
             name="totalBudget"
             value={formData.totalBudget}
             onChange={handleChange}
-            placeholder="Budget total"
+            placeholder={t("projects.totalBudget")}
           />
           <Input
             name="remainingBudget"
             value={formData.remainingBudget}
             onChange={handleChange}
-            placeholder="Budget restant"
+            placeholder={t("projects.remainingBudget")}
           />
         </div>
         <div className="flex justify-end gap-2 mt-4">
           <Button  onClick={onClose}>
-            Annuler
+            {t("common.cancel")}
           </Button>
           <Button
             onClick={async () => {
@@ -81,7 +83,7 @@ export default function EditProjectForm({
               onClose()
             }}
           >
-            Sauvegarder
+            {t("common.save")}
           </Button>
         </div>
       </DialogContent>

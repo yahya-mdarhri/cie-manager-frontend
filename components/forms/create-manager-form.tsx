@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, UserPlus, Loader2, Eye, EyeOff } from "lucide-react"
 import { http } from "@/lib/http"
+import { useLanguage } from "@/lib/language-context"
 
 interface CreateManagerFormProps {
   onCreated?: () => void
@@ -32,6 +33,7 @@ interface ManagerFormData {
 }
 
 export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [loadingDepartments, setLoadingDepartments] = useState(false)
@@ -62,8 +64,8 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
       const departmentList = response.data?.results || response.data || []
       setDepartments(Array.isArray(departmentList) ? departmentList : [])
     } catch (error) {
-      console.error('Error loading departments:', error)
-      alert("Erreur lors du chargement des départements")
+  console.error('Error loading departments:', error)
+  alert(t("manager.errors.loadDepartments"))
     } finally {
       setLoadingDepartments(false)
     }
@@ -74,17 +76,17 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
 
     // Validation
     if (!formData.first_name || !formData.last_name || !formData.username || !formData.email || !formData.password || !formData.departmentId) {
-      alert("Veuillez remplir tous les champs obligatoires")
+      alert(t("manager.errors.requiredFields"))
       return
     }
 
     if (formData.password !== formData.confirmPassword) {
-      alert("Les mots de passe ne correspondent pas")
+      alert(t("manager.errors.passwordMismatch"))
       return
     }
 
     if (formData.password.length < 6) {
-      alert("Le mot de passe doit contenir au moins 6 caractères")
+      alert(t("manager.errors.passwordTooShort"))
       return
     }
 
@@ -122,7 +124,7 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
         departmentId: "",
       })
 
-      alert("Manager créé et assigné avec succès")
+      alert(t("manager.createSuccess"))
       // Optionally close dialog
       setOpen(false)
     } catch (error: any) {
@@ -132,7 +134,7 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
         error.response?.data?.email?.[0] ||
         error.response?.data?.detail ||
         error.message ||
-        "Erreur lors de la création du manager"
+        t("manager.errors.create")
       alert(errorMessage)
     } finally {
       setLoading(false)
@@ -158,71 +160,71 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
         {trigger || (
           <Button className="flex items-center gap-2">
             <UserPlus className="h-4 w-4" />
-            Nouveau Manager
+            {t("admin.newManager")}
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+  <DialogContent className="w-full max-w-2xl mx-auto max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5" />
-            Créer un Manager de Département
+            {t("manager.createTitle")}
           </DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Informations Personnelles</CardTitle>
+              <CardTitle className="text-lg">{t("manager.personalInfo")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="first_name">Prénom *</Label>
+                  <Label htmlFor="first_name">{t("manager.firstName")} *</Label>
                   <Input
                     id="first_name"
                     value={formData.first_name}
                     onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
-                    placeholder="Prénom"
+                    placeholder={t("manager.firstName")}
                     required
                     disabled={loading}
                   />
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="last_name">Nom *</Label>
+                  <Label htmlFor="last_name">{t("manager.lastName")} *</Label>
                   <Input
                     id="last_name"
                     value={formData.last_name}
                     onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
-                    placeholder="Nom de famille"
+                    placeholder={t("manager.lastNamePlaceholder")}
                     required
                     disabled={loading}
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username">Nom d'utilisateur *</Label>
+                  <Label htmlFor="username">{t("manager.username")} *</Label>
                   <Input
                     id="username"
                     value={formData.username}
                     onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
-                    placeholder="nom.utilisateur"
+                    placeholder={t("manager.usernamePlaceholder")}
                     required
                     disabled={loading}
                   />
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
+                  <Label htmlFor="email">{t("manager.email")} *</Label>
                   <Input
                     id="email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    placeholder="email@example.com"
+                    placeholder={t("manager.emailPlaceholder")}
                     required
                     disabled={loading}
                   />
@@ -233,19 +235,20 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Sécurité</CardTitle>
+              <CardTitle className="text-lg">{t("manager.security")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="password">Mot de passe *</Label>
+                  <Label htmlFor="password">{t("manager.password")} *</Label>
                   <div className="relative">
                     <Input
                       id="password"
                       type={showPassword ? "text" : "password"}
                       value={formData.password}
+                      className="pr-10"
                       onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder="Minimum 6 caractères"
+                      placeholder={t("manager.passwordMin")}
                       required
                       disabled={loading}
                     />
@@ -263,14 +266,15 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirmer le mot de passe *</Label>
+                  <Label htmlFor="confirmPassword">{t("manager.confirmPassword")} *</Label>
                   <div className="relative">
                     <Input
                       id="confirmPassword"
                       type={showConfirmPassword ? "text" : "password"}
                       value={formData.confirmPassword}
+                      className="pr-10"
                       onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                      placeholder="Répétez le mot de passe"
+                      placeholder={t("manager.repeatPassword")}
                       required
                       disabled={loading}
                     />
@@ -292,18 +296,18 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Assignment</CardTitle>
+              <CardTitle className="text-lg">{t("manager.assignment")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="department">Département à gérer *</Label>
+                <Label htmlFor="department">{t("manager.departmentToManage")} *</Label>
                 <Select
                   value={formData.departmentId}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, departmentId: value }))}
+                  onValueChange={(value: string) => setFormData(prev => ({ ...prev, departmentId: value }))}
                   disabled={loading || loadingDepartments}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder={loadingDepartments ? "Chargement..." : "Sélectionner un département"} />
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={loadingDepartments ? t("common.loading") : t("form.project.selectDepartment")} />
                   </SelectTrigger>
                   <SelectContent>
                     {departments.map((department) => (
@@ -315,27 +319,27 @@ export function CreateManagerForm({ onCreated, trigger }: CreateManagerFormProps
                 </Select>
                 {departments.length === 0 && !loadingDepartments && (
                   <p className="text-sm text-muted-foreground">
-                    Aucun département disponible. Créez d'abord un département.
+                    {t("manager.noDepartments")}
                   </p>
                 )}
               </div>
             </CardContent>
           </Card>
 
-          <div className="flex justify-end gap-3 pt-4">
-            <Button type="button"  onClick={handleCancel} disabled={loading}>
-              Annuler
+          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4">
+            <Button type="button" onClick={handleCancel} disabled={loading} className="w-full sm:w-auto">
+              {t("common.cancel")}
             </Button>
-            <Button type="submit" disabled={loading || departments.length === 0}>
+            <Button type="submit" disabled={loading || departments.length === 0} className="w-full sm:w-auto">
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Création...
+                  {t("manager.creating")}
                 </>
               ) : (
                 <>
                   <UserPlus className="h-4 w-4 mr-2" />
-                  Créer le Manager
+                  {t("manager.create")}
                 </>
               )}
             </Button>

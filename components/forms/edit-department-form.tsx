@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Edit, Building2, Loader2 } from "lucide-react"
 import { http } from "@/lib/http"
+import { useLanguage } from "@/lib/language-context"
 
 interface EditDepartmentFormProps {
   department: {
@@ -28,6 +29,7 @@ interface DepartmentFormData {
 export function EditDepartmentForm({ department, onUpdated, trigger }: EditDepartmentFormProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const { t } = useLanguage()
   const [formData, setFormData] = useState<DepartmentFormData>({
     name: department.name,
     description: department.description || ""
@@ -46,7 +48,7 @@ export function EditDepartmentForm({ department, onUpdated, trigger }: EditDepar
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.name.trim()) {
-      alert("Le nom du département est requis")
+      alert(t('department.nameRequired'))
       return
     }
 
@@ -56,12 +58,12 @@ export function EditDepartmentForm({ department, onUpdated, trigger }: EditDepar
       
       setOpen(false)
       onUpdated?.()
-      alert("Département mis à jour avec succès")
+      alert(t('department.updateSuccess'))
     } catch (error: any) {
       console.error('Error updating department:', error)
       const errorMessage = error.response?.data?.name?.[0] || 
                            error.response?.data?.details || 
-                           "Erreur lors de la mise à jour du département"
+                           t('department.updateError')
       alert(errorMessage)
     } finally {
       setLoading(false)
@@ -85,35 +87,35 @@ export function EditDepartmentForm({ department, onUpdated, trigger }: EditDepar
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Building2 className="h-5 w-5" />
-            Modifier le Département
+            {t('department.editTitle')}
           </DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Informations du Département</CardTitle>
+              <CardTitle className="text-lg">{t('department.infoTitle')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Nom du Département *</Label>
+                <Label htmlFor="name">{t('department.name')} *</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Ex: Tech Center, CIE Direct, TTO..."
+                  placeholder={t('department.namePlaceholder')}
                   required
                   disabled={loading}
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description">{t('department.description')}</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Décrivez les responsabilités et activités du département..."
+                  placeholder={t('department.descriptionPlaceholder')}
                   className="min-h-[100px]"
                   disabled={loading}
                 />
@@ -123,18 +125,18 @@ export function EditDepartmentForm({ department, onUpdated, trigger }: EditDepar
 
           <div className="flex justify-end gap-3 pt-4">
             <Button type="button" variant="ghost" onClick={handleCancel} disabled={loading}>
-              Annuler
+              {t('department.cancel')}
             </Button>
             <Button type="submit" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Mise à jour...
+                  {t('department.updating')}
                 </>
               ) : (
                 <>
                   <Edit className="h-4 w-4 mr-2" />
-                  Mettre à jour
+                  {t('department.update')}
                 </>
               )}
             </Button>

@@ -6,61 +6,9 @@ import { DataTable } from "@/components/ui/data-table"
 import { Pagination } from "@/components/ui/pagination"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
+import { useLanguage } from "@/lib/language-context"
 import { usePagination } from "@/hooks/use-pagination"
 import { http } from "@/lib/http"
-
-const filterFields = [
-  { type: "date" as const, key: "startDate", label: "Date de début", placeholder: "dd/mm/yyyy" },
-  { type: "date" as const, key: "endDate", label: "Date de fin", placeholder: "dd/mm/yyyy" },
-  {
-    type: "select" as const,
-    key: "department",
-    label: "Département",
-    placeholder: "Tous",
-    options: [
-      { value: "all", label: "Tous" },
-      { value: "CIE Direct", label: "CIE Direct" },
-      { value: "Tech Center", label: "Tech Center" },
-      { value: "TTO", label: "TTO" },
-      { value: "Clinique Industrielle", label: "Clinique Industrielle" },
-    ],
-  },
-  {
-    type: "select" as const,
-    key: "coordinator",
-    label: "Coordinateur",
-    placeholder: "Tous",
-    options: [
-      { value: "all", label: "Tous" },
-      { value: "Omar Jebbouri", label: "Omar Jebbouri" },
-      { value: "Wacim Benyahya", label: "Wacim Benyahya" },
-      { value: "Bertrand Denise", label: "Bertrand Denise" },
-    ],
-  },
-  {
-    type: "select" as const,
-    key: "paymentType",
-    label: "Type de Paiement",
-    placeholder: "Tous",
-    options: [
-      { value: "all", label: "Tous" },
-      { value: "Bank Transfer", label: "Virement Bancaire" },
-      { value: "Check", label: "Chèque" },
-      { value: "Cash", label: "Espèces" },
-      { value: "Other", label: "Autre" },
-    ],
-  },
-]
-
-const columns = [
-  { key: "project", label: "Projet" },
-  { key: "code", label: "Code Projet" },
-  { key: "date", label: "Date" },
-  { key: "amount", label: "Montant", className: "text-right font-medium text-green-600" },
-  { key: "paymentType", label: "Type de Paiement" },
-  { key: "reference", label: "Référence" },
-  { key: "description", label: "Description" },
-]
 
 async function fetchRevenuesForUser(
   user: { role: string; department?: string | number | null },
@@ -159,11 +107,65 @@ async function fetchRevenuesForUser(
 
 export default function RevenuesPage() {
   const { user } = useAuth()
+  const { t } = useLanguage()
   const { pagination, goToPage, updateFromResponse } = usePagination(10)
   const [rows, setRows] = useState<any[]>([])
   const [allRows, setAllRows] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [filters, setFilters] = useState<Record<string, string>>({})
+
+  const filterFields = [
+    { type: "date" as const, key: "startDate", label: t("revenues.startDate"), placeholder: "dd/mm/yyyy" },
+    { type: "date" as const, key: "endDate", label: t("revenues.endDate"), placeholder: "dd/mm/yyyy" },
+    {
+      type: "select" as const,
+      key: "department",
+      label: t("common.department"),
+      placeholder: t("common.all"),
+      options: [
+        { value: "all", label: t("common.all") },
+        { value: "CIE Direct", label: "CIE Direct" },
+        { value: "Tech Center", label: "Tech Center" },
+        { value: "TTO", label: "TTO" },
+        { value: "Clinique Industrielle", label: "Clinique Industrielle" },
+      ],
+    },
+    {
+      type: "select" as const,
+      key: "coordinator",
+      label: t("common.coordinator"),
+      placeholder: t("common.all"),
+      options: [
+        { value: "all", label: t("common.all") },
+        { value: "Omar Jebbouri", label: "Omar Jebbouri" },
+        { value: "Wacim Benyahya", label: "Wacim Benyahya" },
+        { value: "Bertrand Denise", label: "Bertrand Denise" },
+      ],
+    },
+    {
+      type: "select" as const,
+      key: "paymentType",
+      label: t("revenues.paymentType"),
+      placeholder: t("common.all"),
+      options: [
+        { value: "all", label: t("common.all") },
+        { value: "Bank Transfer", label: t("revenues.bankTransfer") },
+        { value: "Check", label: t("revenues.check") },
+        { value: "Cash", label: t("revenues.cash") },
+        { value: "Other", label: t("revenues.other") },
+      ],
+    },
+  ]
+
+  const columns = [
+    { key: "project", label: t("revenues.project") },
+    { key: "code", label: t("revenues.projectCode") },
+    { key: "date", label: t("revenues.date") },
+    { key: "amount", label: t("revenues.amount"), className: "text-right font-medium text-green-600" },
+    { key: "paymentType", label: t("revenues.paymentType") },
+    { key: "reference", label: t("revenues.reference") },
+    { key: "description", label: t("revenues.description") },
+  ]
 
   const applyFilters = (data: any[], currentFilters: Record<string, string>) => {
     return data.filter((row) => {
@@ -247,16 +249,16 @@ export default function RevenuesPage() {
   const totalAmount = rows.reduce((sum, r: any) => sum + Number(r.amountValue || 0), 0)
   const totalAmountStr = Number(totalAmount).toLocaleString("fr-FR", { style: "currency", currency: "MAD" })
   const summary = [
-    { label: "Total Encaissements", value: String(rows.length) },
-    { label: "Montant Total", value: totalAmountStr },
-    { label: "Projets Impliqués", value: String(new Set(rows.map((r) => r.code)).size) },
+    { label: t("revenues.totalRevenues"), value: String(rows.length) },
+    { label: t("revenues.totalAmount"), value: totalAmountStr },
+    { label: t("revenues.projectsInvolved"), value: String(new Set(rows.map((r) => r.code)).size) },
   ]
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Gestion des Encaissements</h1>
-        <p className="text-muted-foreground">Suivi et analyse des revenus par projet</p>
+        <h1 className="text-3xl font-bold text-foreground">{t("revenues.title")}</h1>
+        <p className="text-muted-foreground">{t("revenues.subtitle")}</p>
       </div>
 
       {/* Hide department filter for department managers (they only see their own dept) */}
@@ -266,12 +268,12 @@ export default function RevenuesPage() {
         onReset={handleReset}
       />
 
-  <DataTable title="Liste des Encaissements" columns={columns} data={rows} summary={summary} loading={loading} tableId="revenues" />
+  <DataTable title={t("revenues.listTitle")} columns={columns} data={rows} summary={summary} loading={loading} tableId="revenues" />
 
       {/* Pagination */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Affichage de {rows.length} encaissement(s) sur {pagination.totalCount} total
+          {t("revenues.showing")} {rows.length} {t("revenues.revenuesOf")} {pagination.totalCount} {t("revenues.total")}
         </div>
         <Pagination
           currentPage={pagination.currentPage}

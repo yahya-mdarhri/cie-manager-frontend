@@ -7,10 +7,14 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
+import { useToast } from "@/hooks/use-toast"
+import { useLanguage } from "@/lib/language-context"
 import { http } from "@/lib/http"
 
 export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { user } = useAuth()
+  const { user, login } = useAuth()
+  const { t } = useLanguage()
+  const { toast } = useToast()
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const [password, setPassword] = useState("")
@@ -87,22 +91,23 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     if (profilePicture) formData.append('profile_picture', profilePicture)
 
     try {
-      const response = await http.put('/api/accounts/me/', formData)
-      
+      const response = await http.patch('/api/accounts/me/', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
       const data = response.data
-      
-      // Update localStorage with new data
+      // Update auth context so header/avatar refreshes immediately
       const fullName = [data.first_name, data.last_name].filter(Boolean).join(' ')
-      const u = JSON.parse(localStorage.getItem('user') || '{}')
-      u.name = fullName || data.username || data.email
-      u.profilePicture = data.profile_picture ?? null
-      localStorage.setItem('user', JSON.stringify(u))
-      
-      alert('Profil mis à jour avec succès')
+      login({
+        id: String(data.id ?? ''),
+        email: data.email ?? '',
+        name: fullName || data.username || data.email || '',
+        role: data.role ?? '',
+        department: data.department ?? '',
+        avatarUrl: data.profile_picture_url ?? null,
+      })
+      toast({ title: t('settings.profileUpdateSuccess') })
       onOpenChange(false)
     } catch (error) {
       console.error('Profile update failed:', error)
-      alert('Erreur lors de la mise à jour du profil')
+      toast({ title: t('settings.profileUpdateError') })
     } finally {
       setLoading(false)
     }
@@ -112,35 +117,35 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Paramètres</DialogTitle>
+          <DialogTitle>{t('settings.title')}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="first_name">Prénom</Label>
+              <Label htmlFor="first_name">{t('settings.firstName')}</Label>
               <Input
                 id="first_name"
                 type="text"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                placeholder="Prénom"
+                placeholder={t('settings.firstName')}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="last_name">Nom</Label>
+              <Label htmlFor="last_name">{t('settings.lastName')}</Label>
               <Input
                 id="last_name"
                 type="text"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                placeholder="Nom de famille"
+                placeholder={t('settings.lastName')}
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="profile-picture">Photo de profil</Label>
+            <Label htmlFor="profile-picture">{t('settings.profilePicture')}</Label>
             <Input
               id="profile-picture"
               type="file"
@@ -150,31 +155,31 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Nouveau mot de passe</Label>
+            <Label htmlFor="password">{t('settings.newPassword')}</Label>
             <Input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Laissez vide pour ne pas changer"
+              placeholder={t('settings.leaveEmpty')}
             />
           </div>
 
           <div className="flex items-center justify-between">
-            <Label htmlFor="dark-mode">Mode sombre</Label>
+            <Label htmlFor="dark-mode">{t('settings.darkMode')}</Label>
             <Switch id="dark-mode" />
           </div>
 
           <div className="flex items-center justify-between">
-            <Label htmlFor="notifications">Notifications</Label>
+            <Label htmlFor="notifications">{t('settings.notifications')}</Label>
             <Switch id="notifications" defaultChecked />
           </div>
 
           {/* Table columns settings */}
           {tableMeta && tableId && (
             <div className="space-y-2">
-              <Label>Colonnes du tableau ({tableId})</Label>
-              <div className="grid grid-cols-1 gap-2 max-h-48 overflow-auto p-2 border rounded">
+              <Label>{t('settings.tableColumns')} ({tableId})</Label>
+              <div className="grid grid-cols-1 gap-2 max-h-48 overflow-auto p-2 border border-border rounded bg-muted">
                 {tableMeta.map((col) => (
                   <label key={col.key} className="flex items-center gap-2">
                     <input
@@ -203,14 +208,14 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                       )
                       // notify others (same window)
                       window.dispatchEvent(new CustomEvent('table-columns-updated', { detail: { tableId } }))
-                      alert('Paramètres du tableau enregistrés')
+                      alert(t('settings.saveTableSuccess'))
                     } catch (e) {
                       console.error('Failed to save table settings', e)
-                      alert('Impossible d\'enregistrer les paramètres du tableau')
+                    alert(t('settings.saveTableError'))
                     }
                   }}
                 >
-                  Enregistrer les colonnes
+                  {t('settings.saveColumns')}
                 </Button>
                 <Button
                   type="button"
@@ -222,17 +227,17 @@ export function SettingsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                     setVisibleKeys(new Set(defaults))
                     localStorage.setItem(`table-columns-visible:${tableId}`, JSON.stringify(defaults))
                     window.dispatchEvent(new CustomEvent('table-columns-updated', { detail: { tableId } }))
-                    alert('Réinitialisé aux valeurs par défaut')
+                    alert(t('settings.resetSuccess'))
                   }}
                 >
-                  Réinitialiser
+                  {t('settings.reset')}
                 </Button>
               </div>
             </div>
           )}
 
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Mise à jour...' : 'Enregistrer les modifications'}
+            {loading ? t('settings.updating') : t('settings.saveChanges')}
           </Button>
         </form>
       </DialogContent>
