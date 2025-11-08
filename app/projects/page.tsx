@@ -105,8 +105,6 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState(initialProjectData);
   const [filteredProjects, setFilteredProjects] = useState(initialProjectData);
   const [loading, setLoading] = useState(false);
-  const [departments, setDepartments] = useState<Array<{ id: number; name: string }>>([])
-  const [departmentsLoading, setDepartmentsLoading] = useState(false)
 
   // Map backend status values to localized labels
   const statusLabel = (s?: string) => {
@@ -128,6 +126,7 @@ export default function ProjectsPage() {
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("all");
+  const [departments, setDepartments] = useState<Array<{id: number; name: string}>>([]);
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [viewingProject, setViewingProject] = useState<any | null>(null);
   
@@ -168,27 +167,26 @@ export default function ProjectsPage() {
     reload();
   }, [user, pagination.currentPage, pagination.pageSize]);
 
-  // Load departments from backend for the filter
+  // Fetch departments dynamically from backend for filter (director only or if needed globally)
   useEffect(() => {
-    const loadDeps = async () => {
-      if (!user) return
-      setDepartmentsLoading(true)
+    const fetchDepartments = async () => {
+      if (!user) return;
+      // If user is department manager we don't need global list (filter hidden)
+      if (user.role === "department_manager") return;
       try {
-        const allowed = new Set(["CIE Direct", "Tech Center", "TTO", "Clinique Industrielle"]) // keep same policy as elsewhere
-        // Directors can see all departments
-        const { data: raw } = await http.get(`/api/management/departments/`)
-        const arr = Array.isArray((raw as any)?.results || raw) ? (raw as any).results || raw : []
-        const list = user.role === "director" ? arr : arr.filter((d: any) => allowed.has(d.name))
-        setDepartments(list.map((d: any) => ({ id: Number(d.id), name: String(d.name) })))
+        const { data: raw } = await http.get(`${base}/departments/`, { params: { page: 1, size: 100 } });
+        const list = raw?.results || raw || [];
+        if (Array.isArray(list)) {
+          const mapped = list.map((d: any) => ({ id: d.id, name: d.name }));
+          setDepartments(mapped);
+        }
       } catch (e) {
-        // leave departments empty on error
-        setDepartments([])
-      } finally {
-        setDepartmentsLoading(false)
+        // silent fail; keep static list empty
+        console.warn("Failed to fetch departments", e);
       }
-    }
-    loadDeps()
-  }, [user])
+    };
+    fetchDepartments();
+  }, [user]);
 
   // Apply filters whenever projects or filter criteria change
   useEffect(() => {
@@ -205,10 +203,9 @@ export default function ProjectsPage() {
       );
     }
 
-    // Apply department filter (from backend list)
+    // Apply department filter (using department id from backend)
     if (selectedDepartment !== "all") {
-      const depId = Number(selectedDepartment)
-      filtered = filtered.filter((project: any) => Number(project.departmentId) === depId)
+      filtered = filtered.filter((project: any) => String(project.departmentId) === String(selectedDepartment));
     }
 
     // Apply status filter
@@ -348,9 +345,7 @@ export default function ProjectsPage() {
                 <SelectContent>
                   <SelectItem value="all">{t("common.allDepartments")}</SelectItem>
                   {departments.map((d) => (
-                    <SelectItem key={d.id} value={String(d.id)}>
-                      {d.name}
-                    </SelectItem>
+                    <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
