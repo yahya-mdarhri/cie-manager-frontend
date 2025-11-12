@@ -116,7 +116,7 @@ export default function Dashboard() {
             action: t(`dashboard.activity.${ak}`),
             model: t(`dashboard.models.${a.content_type}`)
           }),
-          subtitle: `${a.object_name} • ${formatRelative(a.timestamp)}`,
+          subtitle: `${a.object_name} • ${a.user_name || a.user_email} • ${formatRelative(a.timestamp)}`,
           color: colorFor(a.content_type)
         }
       })

@@ -7,6 +7,7 @@ export interface ActivityLog {
   id: number
   user: number | null
   user_email: string
+  user_name?: string
   content_type: string
   model_name: string
   object_id: string
@@ -30,7 +31,9 @@ export function useRecentActivity(limit: number = 20, autoRefresh: boolean = fal
       const { data } = await http.get<ActivityLog[]>("/api/management/recent-activity/", {
         params: { limit }
       })
-      setActivities(Array.isArray(data) ? data : [])
+  // Normalize presence of user_name fallback
+  const list = Array.isArray(data) ? data : []
+  setActivities(list.map(a => ({ ...a, user_name: a.user_name || a.user_email })))
       setError(null)
     } catch (err: any) {
       console.error("Failed to fetch recent activity:", err)

@@ -35,6 +35,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
     name: "",
     department: "",
     coordinator: "",
+    coordinatorUserId: "",
     nature: "",
     client: "",
     totalBudget: "",
@@ -55,6 +56,7 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
     contractFile: null as File | null,
   })
   const [departments, setDepartments] = useState<any[]>([])
+  const [managers, setManagers] = useState<any[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [needsExpressionDate, setNeedsExpressionDate] = useState<Date | undefined>(undefined)
   const [clientPoDate, setClientPoDate] = useState<Date | undefined>(undefined)
@@ -131,15 +133,39 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
               !prev.department && arr.length > 0 ? { ...prev, department: String(arr[0].id) } : prev,
             )
           }
-          
+          // Director: leave coordinator empty to force explicit selection or backend mapping via coordinator_user_id
           return
         }
 
-        if (user?.role === "department_manager" && user.department) {
-          const { data: dep } = await http.get(`/api/management/departments/${user.department}/`)
+        // Helper: resolve current user's department id when shape is either id, string, or nested object
+        const resolveDepId = (depVal: any): number | null => {
+          if (depVal == null) return null
+          if (typeof depVal === "number") return depVal
+          if (typeof depVal === "string") {
+            const n = Number(depVal)
+            if (Number.isFinite(n)) return n
+            try {
+              const maybeObj = JSON.parse(depVal)
+              if (maybeObj && typeof maybeObj === "object" && typeof maybeObj.id === "number") return maybeObj.id
+            } catch {}
+            return null
+          }
+          if (typeof depVal === "object" && typeof depVal.id === "number") return depVal.id
+          return null
+        }
+
+        const managerDepId = user?.role === "department_manager" ? resolveDepId((user as any).department) : null
+        if (user?.role === "department_manager" && managerDepId) {
+          const { data: dep } = await http.get(`/api/management/departments/${managerDepId}/`)
             if (allowed.has(dep.name)) {
               setDepartments([dep])
-              setFormData((prev) => ({ ...prev, department: String(dep.id) }))
+              // Auto-assign coordinator to the manager themselves if blank
+              setFormData((prev) => ({
+                ...prev,
+                department: String(dep.id),
+                // Use email as stable identifier fallback
+                coordinator: prev.coordinator || (user?.email || "")
+              }))
             } else {
               setDepartments([])
             }
@@ -161,6 +187,25 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
     loadDeps()
   }, [user])
 
+  // When a director selects a department, fetch its managers to choose the coordinator from
+  useEffect(() => {
+    const fetchManagers = async () => {
+      if (user?.role !== "director") return
+      if (!formData.department) return
+      try {
+        const { data: raw } = await http.get(`/api/management/departments/${formData.department}/managers/`)
+        const list = Array.isArray((raw as any)?.results || raw) ? (raw as any).results || raw : []
+        setManagers(list)
+        // Reset selection when department changes
+        setFormData((prev) => ({ ...prev, coordinatorUserId: "", coordinator: "" }))
+      } catch (e) {
+        setManagers([])
+      }
+    }
+    fetchManagers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.department, user?.role])
+
   const toggleStep = (stepIndex: number) => {
     setExpandedSteps((prev) => (prev.includes(stepIndex) ? prev.filter((i) => i !== stepIndex) : [...prev, stepIndex]))
   }
@@ -171,8 +216,14 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
     setIsSubmitting(true)
     try {
       let departmentId: number | null = null
-      if (user.role === "department_manager" && user.department) {
-        departmentId = Number(user.department)
+      if (user.role === "department_manager" && (user as any).department) {
+        const depVal: any = (user as any).department
+        if (typeof depVal === "number") departmentId = depVal
+        else if (typeof depVal === "object" && typeof depVal.id === "number") departmentId = depVal.id
+        else if (typeof depVal === "string") {
+          const n = Number(depVal)
+          if (Number.isFinite(n)) departmentId = n
+        }
       } else if (user.role === "director") {
         departmentId = Number(formData.department || 0)
       }
@@ -183,7 +234,21 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
       const fd = new FormData()
       fd.append("project_code", formData.code)
       fd.append("project_name", formData.name)
-      fd.append("coordinator", formData.coordinator)
+      // Coordinator logic aligned with rule: Coordinators are department managers
+      if (user.role === "director") {
+        // Directors must pick a manager from the selected department
+        if (!formData.coordinatorUserId) {
+          throw new Error(t("form.project.selectCoordinator"))
+        }
+        fd.append("coordinator_user_id", formData.coordinatorUserId)
+      } else {
+        // Department manager: default to self if blank
+        let coordinatorValue = formData.coordinator.trim()
+        if (!coordinatorValue) {
+          coordinatorValue = user.email || "Manager"
+        }
+        fd.append("coordinator", coordinatorValue)
+      }
       fd.append("project_nature", formData.nature)
       const toDate = (d?: Date) => (d ? d.toISOString().slice(0, 10) : "")
       const needsExprStr = toDate(formData.timeline[0])
@@ -311,41 +376,51 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="department">{t("form.project.department")}</Label>
-                    <Select
-                      value={formData.department}
-                      onValueChange={(value) => setFormData((prev) => ({ ...prev, department: value }))}
-                      disabled={user?.role === "department_manager"}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={t("form.project.selectDepartment")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {departments.map((d) => (
-                          <SelectItem key={d.id} value={String(d.id)}>
-                            {d.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="coordinator">{t("form.project.coordinator")}</Label>
-                    <Select
-                      value={formData.coordinator}
-                      onValueChange={(value) => setFormData((prev) => ({ ...prev, coordinator: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={t("form.project.selectCoordinator")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Omar Jebbouri">Omar Jebbouri</SelectItem>
-                        <SelectItem value="Wacim Benyahya">Wacim Benyahya</SelectItem>
-                        <SelectItem value="Bertrand Denise">Bertrand Denise</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {user?.role !== "department_manager" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="department">{t("form.project.department")}</Label>
+                      <Select
+                        value={formData.department}
+                        onValueChange={(value) => setFormData((prev) => ({ ...prev, department: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={t("form.project.selectDepartment")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {departments.map((d) => (
+                            <SelectItem key={d.id} value={String(d.id)}>
+                              {d.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {user?.role === "director" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="coordinator">{t("form.project.coordinator")}</Label>
+                      <Select
+                        value={formData.coordinatorUserId}
+                        onValueChange={(value) => setFormData((prev) => ({ ...prev, coordinatorUserId: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={t("form.project.selectCoordinator")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {managers.length === 0 && (
+                            <div className="px-3 py-2 text-sm text-muted-foreground">
+                              {t("form.project.selectCoordinator")}
+                            </div>
+                          )}
+                          {managers.map((m) => (
+                            <SelectItem key={m.id} value={String(m.id)}>
+                              {m.first_name || m.last_name ? `${m.first_name || ""} ${m.last_name || ""}`.trim() : m.email}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="nature">{t("form.project.nature")}</Label>
                     <Select
