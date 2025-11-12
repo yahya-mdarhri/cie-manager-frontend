@@ -117,20 +117,7 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-sm">
-            <p className="text-muted-foreground">
-              Pas encore de compte ?{" "}
-              <Link href="/auth/signup" className="text-primary hover:underline">
-                Créer un compte
-              </Link>
-            </p>
-          </div>
-
-          <div className="mt-4 p-3 bg-muted/50 rounded-lg text-sm text-muted-foreground">
-            <p className="font-medium mb-1">Compte de démonstration :</p>
-            <p>Email: michele98@example.net</p>
-            <p>Mot de passe: password123</p>
-          </div>
+          
         </CardContent>
       </Card>
     </div>
