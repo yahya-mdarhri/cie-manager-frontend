@@ -42,11 +42,18 @@ export default function Dashboard() {
   const formatMoney = (n: number) => Number(n || 0).toLocaleString(locale, { style: "currency", currency: "MAD" })
 
       let projects: any[] = []
+      let paymentsTotal = 0
       try {
         if (user.role === "director") {
           // Fetch all projects in one call for directors
           const { data: raw } = await http.get(`${base}/all/projects/`, { params: { page: 1, size: 1000 } })
           projects = (raw?.results || raw) ?? []
+          // Fetch all payments and sum amounts to reflect Encaissements in "Encaissé"
+          try {
+            const { data: prow } = await http.get(`${base}/all/payments/`, { params: { page: 1, size: 1000 } })
+            const payments = (prow?.results || prow) ?? []
+            paymentsTotal = payments.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0)
+          } catch {}
         } else if (user.role === "department_manager" && user.department) {
           // Fetch projects for the manager's department (normalize department id if it's an object)
           const depId =
@@ -56,6 +63,14 @@ export default function Dashboard() {
           if (depId) {
             const { data: raw } = await http.get(`${base}/departments/${depId}/projects/`, { params: { page: 1, size: 1000 } })
             projects = (raw?.results || raw) ?? []
+            // Sum payments for all projects in this department
+            for (const p of projects) {
+              try {
+                const { data: prw } = await http.get(`${base}/departments/${depId}/projects/${p.id}/payments/`, { params: { page: 1, size: 1000 } })
+                const plist = (prw?.results || prw) ?? []
+                paymentsTotal += plist.reduce((acc: number, r: any) => acc + Number(r.amount || 0), 0)
+              } catch {}
+            }
           } else {
             projects = []
           }
@@ -69,12 +84,16 @@ export default function Dashboard() {
         (acc, p: any) => {
           acc.projects += 1
           acc.totalBudget += Number(p.total_budget || 0)
-          acc.committedBudget += Number(p.committed_budget || 0)
+          // committedBudget is used to display "Encaissé"; we override later with Encaissements total
+          acc.committedBudget += 0
           acc.remainingBudget += Number(p.remaining_budget || 0)
           return acc
         },
         { projects: 0, totalBudget: 0, committedBudget: 0, remainingBudget: 0 }
       )
+      // Override with Encaissements logic: Encaissé = total encaissements; Remaining = Total - Encaissé
+      totals.committedBudget = paymentsTotal
+      totals.remainingBudget = Math.max(0, totals.totalBudget - totals.committedBudget)
       setMetrics(totals)
 
       // Status counts

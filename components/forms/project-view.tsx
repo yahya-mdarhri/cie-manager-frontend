@@ -449,8 +449,8 @@ export default function ProjectViewModal({
   const spentBudget = depensesAll.reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
   const totalEncaissements = encaissementsAll.reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
   const totalBudgetNum = budget.total
-  // Engaged depends on backend committed minus payments received
-  const engagedBudget = Math.max(0, (budget.committed || 0) - totalEncaissements)
+  // Engaged is redefined as total Encaissements (requested)
+  const engagedBudget = totalEncaissements
   // Derive remaining so percentages sum to 100%
   const derivedRemaining = Math.max(0, (totalBudgetNum || 0) - (engagedBudget || 0) - (spentBudget || 0))
   const spentPct = totalBudgetNum > 0 ? (spentBudget / totalBudgetNum) * 100 : 0
@@ -531,7 +531,7 @@ export default function ProjectViewModal({
     const fmtCurrency = (v: number) =>
       new Intl.NumberFormat("fr-MA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + " MAD"
     const total = Number(budget.total || 0)
-    const engaged = Number(engagedBudget || 0)
+  const engaged = Number(engagedBudget || 0)
     const available = Math.max(0, total - engaged - Number(spentBudget || 0))
     pdf.setFont("helvetica", "bold")
     pdf.setFontSize(12)
@@ -540,7 +540,7 @@ export default function ProjectViewModal({
     pdf.setFont("helvetica", "normal")
     pdf.setFontSize(11)
     pdf.text(`Total: ${fmtCurrency(total)}`, margin, y)
-    pdf.text(`Engagé: ${fmtCurrency(engaged)}`, pageWidth / 2, y)
+  pdf.text(`Encaissé: ${fmtCurrency(engaged)}`, pageWidth / 2, y)
     y += 6
     pdf.text(`Disponible: ${fmtCurrency(available)}`, margin, y)
     y += 10

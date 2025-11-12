@@ -18,7 +18,7 @@
     "overview": "Overview",
     "activeProjects": "Active Projects",
     "totalBudget": "Total Budget",
-    "budgetEngaged": "Budget Engaged",
+  "budgetEngaged": "Collected",
     "remainingBudget": "Remaining Budget",
     "recentActivity": "Recent Activity",
     "projectsByStatus": "Projects by Status",
@@ -195,10 +195,10 @@
     "budget": {
       "total": "Total Budget",
       "spent": "Spent",
-      "engaged": "Engaged",
+      "engaged": "Collected",
       "available": "Available",
       "spentBudget": "Spent Budget",
-      "engagedBudget": "Engaged Budget",
+      "engagedBudget": "Collected Budget",
       "breakdown": "Budget Breakdown"
     },
     "timeline": {

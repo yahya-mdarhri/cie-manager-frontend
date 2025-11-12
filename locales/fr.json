@@ -18,7 +18,7 @@
     "overview": "Vue d'ensemble",
     "activeProjects": "Projets Actifs",
     "totalBudget": "Budget Total",
-    "budgetEngaged": "Budget Engagé",
+  "budgetEngaged": "Encaissé",
     "remainingBudget": "Budget Restant",
     "recentActivity": "Activité Récente",
     "projectsByStatus": "Projets par Statut",
@@ -195,10 +195,10 @@
     "budget": {
       "total": "Budget Total",
       "spent": "Dépensé",
-      "engaged": "Engagé",
+      "engaged": "Encaissé",
       "available": "Disponible",
       "spentBudget": "Budget Dépensé",
-      "engagedBudget": "Budget Engagé",
+      "engagedBudget": "Budget encaissé",
       "breakdown": "Ventilation du Budget"
     },
     "timeline": {
