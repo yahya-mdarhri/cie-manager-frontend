@@ -4,7 +4,8 @@
     "projects": "Projets",
     "revenues": "Revenus",
     "expenses": "Dépenses",
-    "admin": "Administration"
+    "admin": "Administration",
+    "masterData": "Clients & Fournisseurs"
   },
   "header": {
     "search": "Rechercher...",
@@ -53,6 +54,8 @@
   "projects": {
     "title": "Projets",
     "new": "Nouveau Projet",
+    "project": "Projet",
+    "projects": "Projets",
     "all": "Tous les projets",
     "active": "Projets actifs",
     "completed": "Projets terminés",
@@ -90,6 +93,10 @@
       "nature": "Nature du Projet*",
       "selectNature": "Sélectionner la nature",
       "client": "Nom du Client*",
+      "clientNameLabel": "Nom du client (texte libre)*",
+      "mainSupplier": "Fournisseur principal",
+      "selectClient": "Sélectionner un client",
+      "selectSupplier": "Sélectionner un fournisseur",
       "budget": "Budget",
       "totalBudget": "Budget Total (MAD)*",
       "budgetBreakdown": "Ventilation du Budget (MAD) (Optionnel)",
@@ -262,6 +269,9 @@
     "quickActions": "Actions d'Administration",
     "directorHelp": "En tant que directeur, vous pouvez créer de nouveaux départements et assigner des managers.",
     "fullAdmin": "Administration Complète",
+    "masterData": "Clients & Fournisseurs",
+    "clients": "Clients",
+    "suppliers": "Fournisseurs",
     "departments": "Départements",
     "users": "Utilisateurs",
     "managers": "Managers",
@@ -328,6 +338,7 @@
     "all": "Tous",
     "allCategories": "Toutes",
     "expenseCount": "dépense(s)",
+    "totalExpense": "Total Dépenses",
     "totalExpenses": "Total Dépenses",
     "totalAmount": "Montant Total",
     "projectsInvolved": "Projets Impliqués",
@@ -359,6 +370,7 @@
     "amount": "Montant",
     "reference": "Référence",
     "description": "Description",
+    "totalRevenue": "Total Encaissements",
     "totalRevenues": "Total Encaissements",
     "totalAmount": "Montant Total",
     "projectsInvolved": "Projets Impliqués",
@@ -442,6 +454,10 @@
       "count": "{{count}} managers"
     },
   "common": {
+      "view": "Voir",
+      "count": "Nombre",
+      "registrationNumber": "Numéro d'immatriculation",
+      "department": "Département",
     "loading": "Chargement...",
     "error": "Erreur",
     "success": "Succès",

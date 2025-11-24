@@ -4,7 +4,8 @@
     "projects": "Projects",
     "revenues": "Revenues",
     "expenses": "Expenses",
-    "admin": "Administration"
+    "admin": "Administration",
+    "masterData": "Clients & Suppliers"
   },
   "header": {
     "search": "Search...",
@@ -53,6 +54,8 @@
   "projects": {
     "title": "Projects",
     "new": "New Project",
+    "project": "Project",
+    "projects": "Projects",
     "all": "All projects",
     "active": "Active projects",
     "completed": "Completed projects",
@@ -90,6 +93,10 @@
       "nature": "Project Nature*",
       "selectNature": "Select nature",
       "client": "Client Name*",
+      "clientNameLabel": "Client Name (free text)*",
+      "mainSupplier": "Main Supplier",
+      "selectClient": "Select client",
+      "selectSupplier": "Select supplier",
       "budget": "Budget",
       "totalBudget": "Total Budget (MAD)*",
       "budgetBreakdown": "Budget Breakdown (MAD) (Optional)",
@@ -262,6 +269,9 @@
     "quickActions": "Administration Actions",
     "directorHelp": "As a director, you can create new departments and assign managers.",
     "fullAdmin": "Full Administration",
+    "masterData": "Clients & Suppliers",
+    "clients": "Clients",
+    "suppliers": "Suppliers",
     "departments": "Departments",
     "users": "Users",
     "managers": "Managers",
@@ -328,6 +338,7 @@
     "all": "All",
     "allCategories": "All categories",
     "expenseCount": "expense(s)",
+    "totalExpense": "Total Expense",
     "totalExpenses": "Total Expenses",
     "totalAmount": "Total Amount",
     "projectsInvolved": "Projects Involved",
@@ -359,6 +370,7 @@
     "amount": "Amount",
     "reference": "Reference",
     "description": "Description",
+    "totalRevenue": "Total Revenue",
     "totalRevenues": "Total Revenues",
     "totalAmount": "Total Amount",
     "projectsInvolved": "Projects Involved",
@@ -528,6 +540,10 @@
     }
   },
   "common": {
+      "view": "View",
+      "count": "Count",
+      "registrationNumber": "Registration number",
+      "department": "Department",
     "loading": "Loading...",
     "error": "Error",
     "success": "Success",

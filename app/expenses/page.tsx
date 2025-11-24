@@ -9,11 +9,40 @@ import { useAuth } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/language-context";
 import { usePagination } from "@/hooks/use-pagination";
 import { http } from "@/lib/http";
+import { mapDepartmentLabel } from "@/lib/constants";
+
+// Helper: fetch project-level endpoints in limited-size batches to avoid serial long-running loops
+async function fetchProjectExpensesInBatches(base: string, depId: string, projects: any[], params: Record<string, any> = {}, batchSize = 5) {
+  const allExpenses: any[] = [];
+  for (let i = 0; i < projects.length; i += batchSize) {
+    const batch = projects.slice(i, i + batchSize).map((p) => {
+      const url = `${base}/departments/${depId}/projects/${p.id}/expenses/`;
+      return http.get(url, { params }).then((r) => ({ project: p, data: r.data })).catch(() => ({ project: p, data: { results: [] } }));
+    });
+
+    const results = await Promise.all(batch);
+    results.forEach((res: any) => {
+      const expenses = (res.data && (res.data.results || res.data)) || [];
+      expenses.forEach((e: any) => {
+        allExpenses.push({
+          ...e,
+          project_name: res.project.project_name,
+          project_code: res.project.project_code,
+          projectDepartment: res.project.department?.name || "",
+          projectCoordinator: res.project.coordinator || "",
+        });
+      });
+    });
+  }
+
+  return allExpenses;
+}
 
 async function fetchExpensesForUser(
   user: { role: string; department?: string | number | null },
   page: number = 1,
   pageSize: number = 10,
+  filters: Record<string, string> = {},
 ) {
   const base = "/api/management";
   const allowedDepartments = new Set([
@@ -41,7 +70,15 @@ async function fetchExpensesForUser(
 
   // For directors, use the all expenses endpoint for proper pagination
   if (user.role === "director") {
-    const { data: raw } = await http.get(`${base}/all/expenses/`, { params: { page, size: pageSize } });
+    // Build params from pagination + active filters. Skip empty or 'all' values.
+    const params: Record<string, any> = { page, size: pageSize };
+    Object.entries(filters || {}).forEach(([k, v]) => {
+      if (!v) return;
+      if (v === "all") return;
+      params[k] = v;
+    });
+
+    const { data: raw } = await http.get(`${base}/all/expenses/`, { params });
     const expenses = raw.results || raw;
 
     const records = expenses.map((e: any) => ({
@@ -51,7 +88,7 @@ async function fetchExpensesForUser(
       amount: formatMoney(e.amount),
       amountValue: Number(e.amount || 0),
       category: categoryBadge(e.category),
-      supplier: e.supplier || "-",
+      supplier: e.supplier_display || e.supplier || "-",
       // Additional fields for filtering
       projectDepartment: e.project?.department?.name || "",
       projectCoordinator: e.project?.coordinator || "",
@@ -72,25 +109,25 @@ async function fetchExpensesForUser(
 
     // First get all projects for the department
     const { data: projectsRaw } = await http.get(`${base}/departments/${depId}/projects/`, { params: { page: 1, size: 100 } });
-    const projects = projectsRaw.results || projectsRaw;
+    let projects = projectsRaw.results || projectsRaw;
 
-    // Collect all expenses from all projects
-    const allExpenses: any[] = [];
-    for (const p of projects) {
-      const { data: raw } = await http.get(`${base}/departments/${depId}/projects/${p.id}/expenses/`, { params: { page: 1, size: 100 } });
-      {
-        const expenses = raw.results || raw;
-        expenses.forEach((e: any) => {
-          allExpenses.push({
-            ...e,
-            project_name: p.project_name,
-            project_code: p.project_code,
-            projectDepartment: p.department?.name || "",
-            projectCoordinator: p.coordinator || "",
-          });
-        });
-      }
+    // If coordinator filter applied, pre-filter projects to reduce downstream requests
+    if (filters.coordinator && filters.coordinator !== 'all') {
+      const coordFilter = filters.coordinator.trim().toLowerCase();
+      projects = projects.filter((p: any) => (p.coordinator || '').trim().toLowerCase() === coordFilter);
     }
+
+    // Collect all expenses from all projects using batched parallel requests to avoid long serial waits
+    const paramsForProjects: Record<string, any> = { page: 1, size: 100 };
+    Object.entries(filters || {}).forEach(([k, v]) => {
+      if (!v || v === 'all') return;
+      // Only pass filters that project-level expense endpoint supports
+      if (['startDate', 'endDate', 'category'].includes(k)) {
+        paramsForProjects[k] = v;
+      }
+    });
+
+    const allExpenses: any[] = await fetchProjectExpensesInBatches(base, depId, projects, paramsForProjects, 5);
 
     // Implement frontend pagination for department managers
     const startIndex = (page - 1) * pageSize;
@@ -104,7 +141,7 @@ async function fetchExpensesForUser(
       amount: formatMoney(e.amount),
       amountValue: Number(e.amount || 0),
       category: categoryBadge(e.category),
-      supplier: e.supplier || "-",
+      supplier: e.supplier_display || e.supplier || "-",
       // Additional fields for filtering
       projectDepartment: e.projectDepartment || "",
       projectCoordinator: e.projectCoordinator || "",
@@ -132,14 +169,15 @@ export default function ExpensesPage() {
   const [allRows, setAllRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filterOptions, setFilterOptions] = useState<any>({ departments: [], coordinators: [], categories: [] });
 
   // Define filterFields and columns here with translations
   const filterFields = [
     {
       type: "date" as const,
-      key: "startDate",
-      label: t("expenses.startDate"),
-      placeholder: "dd/mm/yyyy",
+            key: "startDate",
+            label: t("expenses.startDate"),
+            placeholder: "dd/mm/yyyy",
     },
     {
       type: "date" as const,
@@ -154,10 +192,7 @@ export default function ExpensesPage() {
       placeholder: t("expenses.all"),
       options: [
         { value: "all", label: t("expenses.all") },
-        { value: "CIE Direct", label: t("departments.cie") },
-        { value: "Tech Center", label: t("departments.tech") },
-        { value: "TTO", label: t("departments.tto") },
-        { value: "Clinique Industrielle", label: t("departments.clinique") },
+        ...filterOptions.departments.map((d: string) => ({ value: d, label: mapDepartmentLabel(d) })),
       ],
     },
     {
@@ -167,9 +202,7 @@ export default function ExpensesPage() {
       placeholder: t("expenses.all"),
       options: [
         { value: "all", label: t("expenses.all") },
-        { value: "Omar Jebbouri", label: "Omar Jebbouri" },
-        { value: "Wacim Benyahya", label: "Wacim Benyahya" },
-        { value: "Bertrand Denise", label: "Bertrand Denise" },
+        ...filterOptions.coordinators.map((c: string) => ({ value: c, label: c })),
       ],
     },
     {
@@ -179,12 +212,7 @@ export default function ExpensesPage() {
       placeholder: t("expenses.allCategories"),
       options: [
         { value: "all", label: t("expenses.allCategories") },
-        { value: "personnel", label: t("expenses.categories.personnel") },
-        { value: "equipment", label: t("expenses.categories.equipment") },
-        { value: "subcontracting", label: t("expenses.categories.subcontracting") },
-        { value: "material", label: t("expenses.categories.material") },
-        { value: "consumables", label: t("expenses.categories.consumables") },
-        { value: "other", label: t("expenses.categories.other") },
+        ...filterOptions.categories.map((c: string) => ({ value: c, label: c })),
       ],
     },
   ];
@@ -229,18 +257,14 @@ export default function ExpensesPage() {
       if (currentFilters.department && currentFilters.department !== "all") {
         const projectDepartment = (row.projectDepartment || "").trim();
         const filterDepartment = currentFilters.department.trim();
-        if (projectDepartment.toLowerCase() !== filterDepartment.toLowerCase())
-          return false;
+        if (!projectDepartment || projectDepartment.toLowerCase() !== filterDepartment.toLowerCase()) return false;
       }
 
       // Coordinator filter - exact match after normalization
       if (currentFilters.coordinator && currentFilters.coordinator !== "all") {
         const projectCoordinator = (row.projectCoordinator || "").trim();
         const filterCoordinator = currentFilters.coordinator.trim();
-        if (
-          projectCoordinator.toLowerCase() !== filterCoordinator.toLowerCase()
-        )
-          return false;
+        if (!projectCoordinator || projectCoordinator.toLowerCase() !== filterCoordinator.toLowerCase()) return false;
       }
 
       // Category filter - more precise matching
@@ -250,19 +274,16 @@ export default function ExpensesPage() {
 
         // Map filter values to actual category values
         const categoryMap: Record<string, string[]> = {
-          personnel: ["personnel", "personal"],
+          personnel: ["personnel"],
           equipment: ["equipment", "équipement"],
           subcontracting: ["subcontract", "sous-traitance", "subcontracting"],
           material: ["material", "matériel"],
-          consumables: ["consumable", "consommable"],
+          consumables: ["consumables", "consommable"],
           other: ["autre", "other"],
         };
 
-        const matchingCategories = categoryMap[filterCategory] || [
-          filterCategory,
-        ];
-        if (!matchingCategories.some((cat) => categoryText.includes(cat)))
-          return false;
+        const matchingCategories = categoryMap[filterCategory] || [filterCategory];
+        if (!matchingCategories.some((cat) => categoryText === cat || categoryText.includes(cat))) return false;
       }
 
       return true;
@@ -274,20 +295,51 @@ export default function ExpensesPage() {
       if (!user) return;
       setLoading(true);
       try {
-        const data = await fetchExpensesForUser(user, 1, 1000); // Load more data for filtering
-        setAllRows(data.records);
-        // Apply initial filters if any
-        const filteredData = applyFilters(data.records, filters);
-        const totalPages = Math.max(
-          1,
-          Math.ceil(filteredData.length / pagination.pageSize),
-        );
-        setRows(filteredData.slice(0, pagination.pageSize));
-        updateFromResponse({
-          page: 1,
-          total: totalPages,
-          count: filteredData.length,
-        });
+        let globalLoaded = false;
+        // Load global filter options so managers get the full lists
+        try {
+          const { data: globalFilters } = await http.get('/api/management/all/filters/');
+          const sanitize = (arr: any[]) => Array.from(new Set((arr || []).map(a => (a || '').trim()))).filter(Boolean).sort((a,b)=>a.localeCompare(b));
+          setFilterOptions({
+            departments: sanitize(globalFilters.departments || []),
+            coordinators: sanitize(globalFilters.coordinators || []),
+            categories: sanitize(globalFilters.expense_categories || []),
+          });
+          globalLoaded = true;
+        } catch (e) {
+          // ignore - we'll fallback to deriving options from returned records below if request fails
+        }
+        // For directors, request server-side filtered/paginated data
+        if (user.role === "director") {
+          const { records, pagination: pag } = await fetchExpensesForUser(user, 1, pagination.pageSize, filters);
+          setRows(records);
+          setAllRows(records);
+          // Only derive if global lists not loaded (fallback)
+          if (!globalLoaded) {
+            const sanitize = (arr: any[]) => Array.from(new Set(arr.map(a => (a || '').trim()))).filter(Boolean).sort((a,b)=>a.localeCompare(b));
+            const deps = sanitize(records.map((r: any) => r.projectDepartment).filter(Boolean));
+            const coords = sanitize(records.map((r: any) => r.projectCoordinator).filter(Boolean));
+            const cats = sanitize(records.map((r: any) => r.categoryText).filter(Boolean));
+            setFilterOptions({ departments: deps, coordinators: coords, categories: cats });
+          }
+          updateFromResponse({ page: pag.page || 1, total: pag.total || 1, count: pag.count || 0 });
+        } else {
+          // department_manager or others: keep previous approach but pass filters to project-level calls
+          const data = await fetchExpensesForUser(user, 1, 1000, filters);
+          setAllRows(data.records);
+          const filteredData = applyFilters(data.records, filters);
+          const totalPages = Math.max(1, Math.ceil(filteredData.length / pagination.pageSize));
+          setRows(filteredData.slice(0, pagination.pageSize));
+          updateFromResponse({ page: 1, total: totalPages, count: filteredData.length });
+          const deps = Array.from(new Set(data.records.map((r: any) => r.projectDepartment).filter(Boolean)));
+          const coords = Array.from(new Set(data.records.map((r: any) => r.projectCoordinator).filter(Boolean)));
+          const cats = Array.from(new Set(data.records.map((r: any) => r.categoryText).filter(Boolean)));
+          // Fallback only if global filter endpoint failed
+          if (!globalLoaded) {
+            const sanitize = (arr: any[]) => Array.from(new Set(arr.map(a => (a || '').trim()))).filter(Boolean).sort((a,b)=>a.localeCompare(b));
+            setFilterOptions({ departments: sanitize(deps), coordinators: sanitize(coords), categories: sanitize(cats) });
+          }
+        }
       } finally {
         setLoading(false);
       }
@@ -296,23 +348,30 @@ export default function ExpensesPage() {
   }, [user]);
 
   useEffect(() => {
-    if (allRows.length === 0) return;
-
-    const filteredData = applyFilters(allRows, filters);
-    const totalPages = Math.max(
-      1,
-      Math.ceil(filteredData.length / pagination.pageSize),
-    );
-    const startIndex = (pagination.currentPage - 1) * pagination.pageSize;
-    const endIndex = startIndex + pagination.pageSize;
-
-    setRows(filteredData.slice(startIndex, endIndex));
-    updateFromResponse({
-      page: pagination.currentPage,
-      total: totalPages,
-      count: filteredData.length,
-    });
-  }, [filters, pagination.currentPage, allRows, pagination.pageSize]);
+    // When filters or page change: director => server-side fetch; department managers => client-side filter/pagination
+    const load = async () => {
+      if (!user) return;
+      setLoading(true);
+      try {
+        if (user.role === "director") {
+          const { records, pagination: pag } = await fetchExpensesForUser(user, pagination.currentPage, pagination.pageSize, filters);
+          setRows(records);
+          // avoid resetting allRows here to prevent triggering this effect again
+          updateFromResponse({ page: pag.page || pagination.currentPage, total: pag.total || 1, count: pag.count || 0 });
+        } else {
+          const filteredData = applyFilters(allRows, filters);
+          const totalPages = Math.max(1, Math.ceil(filteredData.length / pagination.pageSize));
+          const startIndex = (pagination.currentPage - 1) * pagination.pageSize;
+          const endIndex = startIndex + pagination.pageSize;
+          setRows(filteredData.slice(startIndex, endIndex));
+          updateFromResponse({ page: pagination.currentPage, total: totalPages, count: filteredData.length });
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [filters, pagination.currentPage, pagination.pageSize]);
 
   const handlePageChange = (page: number) => {
     goToPage(page);
@@ -345,6 +404,20 @@ export default function ExpensesPage() {
     },
   ];
 
+  // Project-level aggregation (totals per project for current filtered page data)
+  const projectAggregates = (() => {
+    const map: Record<string, { project: string; code: string; total: number; count: number }> = {};
+    rows.forEach((r: any) => {
+      const key = r.code || r.project;
+      if (!map[key]) {
+        map[key] = { project: r.project, code: r.code, total: 0, count: 0 };
+      }
+      map[key].total += Number(r.amountValue || 0);
+      map[key].count += 1;
+    });
+    return Object.values(map).sort((a, b) => a.project.localeCompare(b.project));
+  })();
+
   return (
     <div className="space-y-6">
       <div>
@@ -372,6 +445,42 @@ export default function ExpensesPage() {
         loading={loading}
         tableId="expenses"
       />
+
+      {/* Empty state when filtering by department yields no results */}
+      {!loading && rows.length === 0 && filters.department && filters.department !== 'all' && (
+        <div className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-md p-3">
+          {t('expenses.noDepartmentResults') || 'Aucune dépense trouvée pour le département sélectionné.'}
+        </div>
+      )}
+
+      {/* Project aggregate row table */}
+      {!loading && projectAggregates.length > 0 && (
+        <div className="mt-6">
+          <h2 className="text-lg font-semibold mb-2">{t('expenses.projectTotals') || 'Totaux par projet (page filtrée)'}</h2>
+          <div className="overflow-x-auto border rounded-md">
+            <table className="w-full text-sm">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="text-left p-2">{t('expenses.project') || 'Projet'}</th>
+                  <th className="text-left p-2">{t('expenses.projectCode') || 'Code'}</th>
+                  <th className="text-right p-2">{t('expenses.totalAmount') || 'Montant total'}</th>
+                  <th className="text-right p-2">{t('expenses.expenseCount') || 'Nombre dépenses'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projectAggregates.map(agg => (
+                  <tr key={agg.code} className="border-t">
+                    <td className="p-2">{agg.project}</td>
+                    <td className="p-2">{agg.code}</td>
+                    <td className="p-2 text-right font-medium text-blue-600">{agg.total.toLocaleString('fr-FR', { style: 'currency', currency: 'MAD' })}</td>
+                    <td className="p-2 text-right">{agg.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Pagination */}
       <div className="flex items-center justify-between">

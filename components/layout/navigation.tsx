@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, FolderOpen, Receipt, TrendingUp, Menu, X, Settings } from "lucide-react"
+import { Home, FolderOpen, Receipt, TrendingUp, Settings, Building2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
@@ -21,6 +21,7 @@ export function Navigation() {
     { name: t("nav.projects"), href: "/projects", icon: FolderOpen },
     { name: t("nav.expenses"), href: "/expenses", icon: Receipt },
     { name: t("nav.revenues"), href: "/revenues", icon: TrendingUp },
+    { name: t("nav.masterData"), href: "/admin/master-data", icon: Building2 },
   ]
 
   const adminNavigation = [

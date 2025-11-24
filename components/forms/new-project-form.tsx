@@ -14,7 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Plus, Upload, ChevronDown, ChevronRight, Info, Calendar, Clock, Trash2 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
-import { http } from "@/lib/http"
+import { http, getResults } from "@/lib/http"
 import { useLanguage } from "@/lib/language-context"
 
 interface NewProjectFormProps {
@@ -37,7 +37,8 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
     coordinator: "",
     coordinatorUserId: "",
     nature: "",
-    client: "",
+    clientId: "",
+    supplierId: "",
     totalBudget: "",
     budgetBreakdown: {
       personnel: "",
@@ -57,6 +58,8 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
   })
   const [departments, setDepartments] = useState<any[]>([])
   const [managers, setManagers] = useState<any[]>([])
+  const [clients, setClients] = useState<any[]>([])
+  const [clientQuery, setClientQuery] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [needsExpressionDate, setNeedsExpressionDate] = useState<Date | undefined>(undefined)
   const [clientPoDate, setClientPoDate] = useState<Date | undefined>(undefined)
@@ -118,6 +121,18 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
       },
     }))
   }, [needsExpressionDate, clientPoDate, endDate])
+
+  // Load master data (clients only) when dialog opens
+  useEffect(() => {
+    if (!open) return
+    const loadMaster = async () => {
+      try {
+        const cRes = await http.get(`/api/management/clients/`, { params: { page_size: 50 } })
+        setClients(getResults(cRes.data))
+      } catch {}
+    }
+    loadMaster()
+  }, [open])
 
   useEffect(() => {
     const loadDeps = async () => {
@@ -230,6 +245,10 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
       if (!departmentId) {
         throw new Error(t("form.project.departmentNotFound"))
       }
+      if (!formData.clientId) {
+        throw new Error(t("form.project.selectClient"))
+      }
+      // No main supplier on project; only client is required
 
       const fd = new FormData()
       fd.append("project_code", formData.code)
@@ -260,16 +279,15 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
       fd.append("needs_expression_date", needsExprStr)
       fd.append("client_po_date", clientPoStr)
       fd.append("end_date", endDateStr)
-  fd.append("total_budget", String(Number(formData.totalBudget || 0)))
-  // Map budget breakdown to backend field names
-  fd.append("personnel_budget", String(Number(formData.budgetBreakdown.personnel || 0)))
-  fd.append("equipment_budget", String(Number(formData.budgetBreakdown.equipment || 0)))
-  fd.append("subcontracting_budget", String(Number(formData.budgetBreakdown.subcontracting || 0)))
-  // "material" maps to mobility_budget in the backend
-  fd.append("mobility_budget", String(Number(formData.budgetBreakdown.material || 0)))
-  fd.append("consumables_budget", String(Number(formData.budgetBreakdown.consumables || 0)))
-  fd.append("other_budget", String(Number(formData.budgetBreakdown.other || 0)))
-      fd.append("client_name", formData.client)
+        fd.append("total_budget", String(Number(formData.totalBudget || 0)))
+        // Map budget breakdown to backend field names
+        fd.append("personnel_budget", String(Number(formData.budgetBreakdown.personnel || 0)))
+        fd.append("equipment_budget", String(Number(formData.budgetBreakdown.equipment || 0)))
+        fd.append("subcontracting_budget", String(Number(formData.budgetBreakdown.subcontracting || 0)))
+        // "material" maps to mobility_budget in the backend
+        fd.append("mobility_budget", String(Number(formData.budgetBreakdown.material || 0)))
+        fd.append("consumables_budget", String(Number(formData.budgetBreakdown.consumables || 0)))
+        fd.append("other_budget", String(Number(formData.budgetBreakdown.other || 0)))
       fd.append("description", formData.description)
       fd.append("objective", formData.objective)
       fd.append("partners", "")
@@ -293,6 +311,10 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
       if (formData.contractFile) {
         fd.append("contract_documents", formData.contractFile)
       }
+
+      // Master references (client required)
+      fd.append("client", formData.clientId)
+      // Removed main_supplier from project
 
       // Don't set Content-Type manually for FormData — let the browser set the boundary
       await http.post(`/api/management/departments/${departmentId}/projects/create/`, fd)
@@ -421,6 +443,44 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                       </Select>
                     </div>
                   )}
+                  {/* Client master select */}
+                  <div className="space-y-2">
+                    <Label htmlFor="clientMaster">{t("form.project.client")} (master)</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder={t("common.search")}
+                        value={clientQuery}
+                        onChange={(e) => setClientQuery(e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            const { data } = await http.get(`/api/management/clients/`, { params: { q: clientQuery, page_size: 50 } })
+                            setClients(getResults(data))
+                          } catch {}
+                        }}
+                      >
+                        {t("common.search")}
+                      </Button>
+                    </div>
+                    <Select
+                      value={formData.clientId}
+                      onValueChange={(value) => setFormData((prev) => ({ ...prev, clientId: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={t("form.project.selectClient")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clients.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            {c.name} ({c.registration_number})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="nature">{t("form.project.nature")}</Label>
                     <Select
@@ -438,16 +498,8 @@ export function NewProjectForm({ children, onCreated }: NewProjectFormProps) {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="client">{t("form.project.client")}</Label>
-                    <Input
-                      id="client"
-                      value={formData.client}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, client: e.target.value }))}
-                      required
-                    />
-                  </div>
                 </div>
+                {/* Removed supplier selection from project creation */}
               </CardContent>
             </Card>
 

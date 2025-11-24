@@ -75,6 +75,7 @@ interface Transaction {
   type: "encaissement" | "depense"
   category?: string
   supplier?: string
+  client?: string
   invoice_reference?: string
   document_path?: string | null
 }
@@ -127,6 +128,8 @@ export default function ProjectViewModal({
   const [loadingSteps, setLoadingSteps] = useState(false)
   const [activeTab, setActiveTab] = useState<ActiveTab>("details")
   const [editedProject, setEditedProject] = useState<Project>(project)
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null)
+  const [newExpenseSupplierId, setNewExpenseSupplierId] = useState<number | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loadingExpenses, setLoadingExpenses] = useState(false)
   const [budget, setBudget] = useState<{ total: number; committed: number; remaining: number }>(() => {
@@ -146,6 +149,12 @@ export default function ProjectViewModal({
   ])
   const [loadingDocuments, setLoadingDocuments] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  // Master data display (from backend): client/supplier names tied to FKs
+  const [clientMaster, setClientMaster] = useState<string | null>(null)
+  // Master data lists for dropdowns
+  const [suppliers, setSuppliers] = useState<Array<{ id: number; name: string; registration_number: string }>>([])
+  const [clients, setClients] = useState<Array<{ id: number; name: string; registration_number: string }>>([])
+  const [loadingMasterData, setLoadingMasterData] = useState(false)
   // (legacy) print layout state removed; exporting directly via jsPDF now
   const printRef = useRef<HTMLDivElement | null>(null)
 
@@ -291,6 +300,30 @@ export default function ProjectViewModal({
     reference: "",
   })
 
+  // Fetch master data (suppliers, clients) on mount
+  useEffect(() => {
+    const fetchMasterData = async () => {
+      setLoadingMasterData(true)
+      try {
+        // Fetch suppliers
+        const { data: suppliersRaw } = await http.get('/api/management/suppliers/')
+        const suppliersList = suppliersRaw?.results || suppliersRaw || []
+        setSuppliers(Array.isArray(suppliersList) ? suppliersList : [])
+
+        // Fetch clients
+        const { data: clientsRaw } = await http.get('/api/management/clients/')
+        const clientsList = clientsRaw?.results || clientsRaw || []
+        setClients(Array.isArray(clientsList) ? clientsList : [])
+      } catch (error) {
+        console.error("Error fetching master data:", error)
+      } finally {
+        setLoadingMasterData(false)
+      }
+    }
+
+    fetchMasterData()
+  }, [])
+
   useEffect(() => {
     const fetchProjectSteps = async () => {
       if (!project.id || !depId) return
@@ -334,6 +367,10 @@ export default function ProjectViewModal({
             totalBudget: data.total_budget ?? prev.totalBudget,
             status: data.status ?? prev.status,
           }))
+          // Set master data display label if present
+          setClientMaster(data.client_display || null)
+          // Set selected client ID for edit form
+          setSelectedClientId(data.client || null)
         }
         const docs: Document[] = []
         // contract_documents may be a URL string
@@ -400,7 +437,7 @@ export default function ProjectViewModal({
             amount: Number(e.amount || 0),
             type: "depense",
             category: e.category || "",
-            supplier: (e as any).supplier || "",
+            supplier: e.supplier_display || (e as any).supplier || "",
             invoice_reference: (e as any).invoice_reference || "",
             // allow optional document link
             document_path: (e as any).document_path || null,
@@ -696,6 +733,11 @@ export default function ProjectViewModal({
   const handleSaveEdit = async () => {
     try {
       if (!project.id || !depId) throw new Error("Project context missing")
+      // Validate required fields
+      if (!selectedClientId) {
+        alert(tt("form.project.selectClient", "Please select a client"))
+        return
+      }
       // Map UI fields to backend payload
       const payload: any = {}
       if (editedProject.name != null) payload.project_name = editedProject.name
@@ -704,6 +746,8 @@ export default function ProjectViewModal({
       if (editedProject.startDate) payload.signature_date = editedProject.startDate
       if (editedProject.endDate) payload.end_date = editedProject.endDate
       if (editedProject.totalBudget != null) payload.total_budget = Number(editedProject.totalBudget)
+      // Master data references (client required)
+      payload.client = selectedClientId
 
       const { data: updated } = await http.patch(
         `/api/management/departments/${depId}/projects/${project.id}/`,
@@ -796,6 +840,14 @@ export default function ProjectViewModal({
       (async () => {
         try {
           if (!project.id || !depId) throw new Error("Project context missing")
+          // Require the user to pick a supplier for this expense
+          if (!newExpenseSupplierId) {
+            alert(tt(
+              "projectView.expenses.missingSupplier",
+              "Please choose a supplier for this expense."
+            ))
+            return
+          }
           // Normalize category to backend enum values
           const normalizeCategory = (c: string) => {
             const s = (c || "").trim().toLowerCase()
@@ -827,6 +879,7 @@ export default function ProjectViewModal({
             category: normalizeCategory(newTransaction.category),
             supplier: "",
             invoice_reference: "",
+            supplier_ref: newExpenseSupplierId,
           }
           const res = await http.post(
             `/api/management/departments/${depId}/projects/${project.id}/expenses/create/`,
@@ -845,7 +898,7 @@ export default function ProjectViewModal({
               amount: Number(e.amount || 0),
               type: "depense",
               category: e.category || "",
-              supplier: (e as any).supplier || "",
+              supplier: e.supplier_display || (e as any).supplier || "",
               invoice_reference: (e as any).invoice_reference || "",
               document_path: (e as any).document_path || null,
             }))
@@ -862,12 +915,14 @@ export default function ProjectViewModal({
               type: "encaissement",
               category: p.payment_type || "",
               supplier: "",
+              client: p.client_display || "",
               invoice_reference: (p as any).payment_reference || "",
               document_path: null,
             }))
           setTransactions([...mappedExpenses, ...mappedPayments])
           // reset form for another expense
           setNewTransaction({ description: "", amount: "", type: "depense", category: "" })
+          setNewExpenseSupplierId(null)
           showFlash(`${t("dashboard.models.expense")}: ${t("messages.createSuccess")}`)
         } catch (err) {
           console.error("Failed to create expense:", err)
@@ -895,6 +950,7 @@ export default function ProjectViewModal({
             payment_type: normalizePaymentType(newTransaction.category),
             payment_reference: newTransaction.reference || newTransaction.description || "REF",
             description: newTransaction.description || "",
+            client_ref: selectedClientId || null,
           }
           await http.post(
             `/api/management/departments/${depId}/projects/${project.id}/payments/create/`,
@@ -913,7 +969,7 @@ export default function ProjectViewModal({
               amount: Number(e.amount || 0),
               type: "depense",
               category: e.category || "",
-              supplier: (e as any).supplier || "",
+              supplier: e.supplier_display || (e as any).supplier || "",
               invoice_reference: (e as any).invoice_reference || "",
               document_path: (e as any).document_path || null,
             }))
@@ -930,6 +986,7 @@ export default function ProjectViewModal({
               type: "encaissement",
               category: p.payment_type || "",
               supplier: "",
+              client: p.client_display || "",
               invoice_reference: (p as any).payment_reference || "",
               document_path: null,
             }))
@@ -973,7 +1030,7 @@ export default function ProjectViewModal({
             amount: Number(e.amount || 0),
             type: "depense",
             category: e.category || "",
-            supplier: (e as any).supplier || "",
+            supplier: e.supplier_display || (e as any).supplier || "",
             invoice_reference: (e as any).invoice_reference || "",
             document_path: (e as any).document_path || null,
           }))
@@ -990,6 +1047,7 @@ export default function ProjectViewModal({
             type: "encaissement",
             category: p.payment_type || "",
             supplier: "",
+            client: p.client_display || "",
             invoice_reference: (p as any).payment_reference || "",
             document_path: null,
           }))
@@ -1097,14 +1155,25 @@ export default function ProjectViewModal({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="client">{t("projects.client")}</Label>
-                  <Input
-                    id="client"
-                    value={editedProject.client || ""}
-                    onChange={(e) => setEditedProject({ ...editedProject, client: e.target.value })}
-                  />
+                  <Label htmlFor="client">{t("projects.client")} *</Label>
+                  <Select
+                    value={selectedClientId?.toString() || "none"}
+                    onValueChange={(v) => setSelectedClientId(v === "none" ? null : Number(v))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={tt("form.project.selectClient", "Select client")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((c) => (
+                        <SelectItem key={c.id} value={c.id.toString()}>
+                          {c.name} ({c.registration_number})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="startDate">{t("expenses.startDate")}</Label>
@@ -1212,6 +1281,9 @@ export default function ProjectViewModal({
                     <p className="text-sm text-muted-foreground">
                       {transaction.date} • {transaction.category}
                     </p>
+                    {transaction.client && (
+                      <p className="text-xs text-muted-foreground">{tt("projectView.revenues.client", "Client")}: {transaction.client}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="font-semibold text-green-600">+{formatCurrency(transaction.amount)}</span>
@@ -1256,7 +1328,22 @@ export default function ProjectViewModal({
 
             <div className="mb-6 p-4 bg-muted rounded-lg">
               <h4 className="font-medium mb-3">{t("projectView.expenses.addTitle")}</h4>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                <Select
+                  value={newExpenseSupplierId?.toString() || "none"}
+                  onValueChange={(v) => setNewExpenseSupplierId(v === "none" ? null : Number(v))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={tt("form.project.selectSupplier", "Select supplier")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {suppliers.map((s) => (
+                      <SelectItem key={s.id} value={s.id.toString()}>
+                        {s.name} ({s.registration_number})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Input
                   placeholder={t("projectView.expenses.description")}
                   value={newTransaction.description}
@@ -1492,6 +1579,10 @@ export default function ProjectViewModal({
               <div>
                 <p className="text-xs text-muted-foreground uppercase">{t("projectView.header.client")}</p>
                 <p className="font-medium text-foreground">{editedProject.client}</p>
+                {clientMaster ? (
+                  <p className="text-xs text-muted-foreground">{clientMaster}</p>
+                ) : null}
+                
               </div>
             </div>
           </div>

@@ -13,6 +13,8 @@ import { http } from "@/lib/http"
 import ExportMenu from "@/components/ui/export-menu"
 import CreateDepartmentForm from "@/components/forms/create-department-form"
 import CreateManagerForm from "@/components/forms/create-manager-form"
+import CreateClientForm from "@/components/forms/create-client-form"
+import CreateSupplierForm from "@/components/forms/create-supplier-form"
 import { useRecentActivity } from "@/hooks/use-recent-activity"
 
 export default function Dashboard() {
@@ -278,6 +280,8 @@ export default function Dashboard() {
             <div className="flex flex-wrap gap-3">
               <CreateDepartmentForm onCreated={() => console.log('Department created')} />
               <CreateManagerForm onCreated={() => console.log('Manager created')} />
+              <CreateClientForm onCreated={() => console.log('Client created')} />
+              <CreateSupplierForm onCreated={() => console.log('Supplier created')} />
               <Button  asChild>
                 <Link href="/admin" className="flex items-center gap-2">
                   <Settings className="h-4 w-4" />

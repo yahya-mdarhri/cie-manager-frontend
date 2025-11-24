@@ -30,13 +30,6 @@ async function fetchProjectsForUser(
 ): Promise<{ projects: any[]; pagination: any }> {
   const base = "/api/management"; // resolved by http baseURL
 
-  const allowedDepartments = new Set([
-    "CIE Direct",
-    "Tech Center",
-    "TTO",
-    "Clinique Industrielle",
-  ]);
-
   const mapProjects = (projects: any[]) =>
     projects.map((p: any) => ({
       id: p.id,
@@ -54,7 +47,9 @@ async function fetchProjectsForUser(
         currency: "MAD",
       }),
       status: p.status,
-      client: p.client_name,
+      client: p.client_display || p.client_name || "-",
+      // no project-level supplier
+      supplier: "-",
       startDate: p.signature_date || p.needs_expression_date || "",
       endDate: p.end_date,
     }));
@@ -136,6 +131,8 @@ export default function ProjectsPage() {
     { key: "name", label: t("projects.name") },
     { key: "department", label: t("projects.department") },
     { key: "coordinator", label: t("projects.coordinator") },
+    { key: "client", label: t("projects.client") },
+    // removed supplier column; suppliers are expense-level only
     { key: "totalBudget", label: t("projects.totalBudget"), className: "text-right" },
     { key: "remainingBudget", label: t("projects.remainingBudget"), className: "text-right" },
     { key: "status", label: t("projects.status") },

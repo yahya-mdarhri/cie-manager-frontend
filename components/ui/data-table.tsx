@@ -14,10 +14,11 @@ interface DataTableProps {
   title: string
   columns: Column[]
   data: Record<string, any>[]
-  summary?: {
+  summary?: Array<{
     label: string
     value: string
-  }[]
+    className?: string
+  }>
   loading?: boolean
   /** optional identifier used to persist per-table column visibility in localStorage */
   tableId?: string
@@ -77,10 +78,10 @@ export function DataTable({ title, columns, data, summary, loading = false, tabl
       <CardHeader>
         <CardTitle className="text-lg font-semibold">{title}</CardTitle>
         {summary && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
             {summary.map((item, index) => (
               <div key={index} className="text-center p-4 bg-muted/50 rounded-lg">
-                <p className="text-2xl font-bold text-primary">{item.value}</p>
+                <p className={`text-2xl font-bold ${item.className || 'text-primary'}`}>{item.value}</p>
                 <p className="text-sm text-muted-foreground">{item.label}</p>
               </div>
             ))}
@@ -114,7 +115,7 @@ export function DataTable({ title, columns, data, summary, loading = false, tabl
                 </TableRow>
               ) : (
                 data.map((row, index) => (
-                  <TableRow key={index}>
+                  <TableRow key={index} className="hover:bg-muted/40 transition-colors">
                     {renderedColumns.map((column) => (
                       <TableCell key={column.key} className={column.className}>
                         {row[column.key]}
