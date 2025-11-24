@@ -542,7 +542,7 @@
   "common": {
       "view": "View",
       "count": "Count",
-      "registrationNumber": "Registration number",
+      "registrationNumber": "I.C,E",
       "department": "Department",
     "loading": "Loading...",
     "error": "Error",
