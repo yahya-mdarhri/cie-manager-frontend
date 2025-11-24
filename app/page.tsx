@@ -175,23 +175,20 @@ export default function Dashboard() {
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard title={t("dashboard.activeProjects")} value={String(metrics.projects)} icon={FolderOpen} trend={{ value: 0, isPositive: true }} />
+        <MetricCard title={t("dashboard.activeProjects")} value={String(metrics.projects)}  trend={{ value: 0, isPositive: true }} />
         <MetricCard
           title={t("dashboard.totalBudget")}
           value={fmt(metrics.totalBudget)}
-          icon={DollarSign}
           trend={{ value: 0, isPositive: true }}
         />
         <MetricCard
           title={t("dashboard.budgetEngaged")}
           value={fmt(metrics.committedBudget)}
-          icon={TrendingUp}
           trend={{ value: 0, isPositive: true }}
         />
         <MetricCard
           title={t("dashboard.remainingBudget")}
           value={fmt(metrics.remainingBudget)}
-          icon={TrendingDown}
           trend={{ value: 0, isPositive: false }}
         />
       </div>

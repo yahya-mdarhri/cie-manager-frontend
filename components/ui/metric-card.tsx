@@ -4,7 +4,7 @@ import type { LucideIcon } from "lucide-react"
 interface MetricCardProps {
   title: string
   value: string
-  icon: LucideIcon
+  icon?: LucideIcon
   trend?: {
     value: number
     isPositive: boolean
@@ -26,9 +26,9 @@ export function MetricCard({ title, value, icon: Icon, trend }: MetricCardProps)
               </p>
             )}
           </div>
-          <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Icon className="h-6 w-6 text-primary" />
-          </div>
+          {/* <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+            {Icon && <Icon className="h-6 w-6 text-primary" />}
+          </div> */}
         </div>
       </CardContent>
     </Card>
