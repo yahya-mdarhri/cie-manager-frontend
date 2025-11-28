@@ -16,6 +16,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { NewProjectForm } from "@/components/forms/new-project-form"
 import ViewProjectForm from "@/components/forms/project-view"
 import { useAuth } from "@/lib/auth-context"
@@ -23,6 +32,7 @@ import { useLanguage } from "@/lib/language-context"
 import { usePagination } from "@/hooks/use-pagination"
 import { http } from "@/lib/http"
 import { exportProjectsServerCSV } from "@/lib/csv-export"
+import { exportProjectsToExcel } from "@/lib/excel-export"
 async function fetchProjectsForUser(
   user: { role: string; department?: string | number | null },
   page: number = 1,
@@ -121,12 +131,25 @@ export default function ProjectsPage() {
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("all");
-  const [departments, setDepartments] = useState<Array<{id: number; name: string}>>([]);
+  const [departments, setDepartments] = useState<Array<{ id: number; name: string }>>([]);
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [viewingProject, setViewingProject] = useState<any | null>(null);
-  
+
+  // Column visibility state
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
+    code: true,
+    name: true,
+    department: true,
+    coordinator: true,
+    client: true,
+    totalBudget: true,
+    remainingBudget: true,
+    status: true,
+    actions: true,
+  });
+
   // Columns definition with translations
-  const columns = [
+  const allColumns = [
     { key: "code", label: t("projects.code") },
     { key: "name", label: t("projects.name") },
     { key: "department", label: t("projects.department") },
@@ -138,6 +161,8 @@ export default function ProjectsPage() {
     { key: "status", label: t("projects.status") },
     { key: "actions", label: t("projects.actions"), className: "text-center" },
   ];
+
+  const columns = allColumns.filter(col => visibleColumns[col.key]);
 
   async function reload() {
     if (!user) return;
@@ -239,6 +264,10 @@ export default function ProjectsPage() {
     }
   };
 
+  const handleExportExcel = () => {
+    exportProjectsToExcel(projects);
+  };
+
   // Add actions column dynamically
   const dataWithActions = filteredProjects.map((project) => ({
     ...project,
@@ -308,14 +337,51 @@ export default function ProjectsPage() {
               {t("projects.new")}
             </Button>
           </NewProjectForm>
-          <Button variant="ghost" className="flex items-center gap-2" onClick={handleExportCSV}>
-            <Download className="h-4 w-4" />
-            {t("projects.export")}
-          </Button>
-          <Button variant="ghost" className="flex items-center gap-2">
-            <Settings className="h-4 w-4" />
-            {t("header.settings")}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                {t("projects.export")}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={handleExportCSV}>
+                CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportExcel}>
+                Excel
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                {t("header.settings")}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[200px]">
+              <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {allColumns
+                .filter((col) => col.key !== "actions") // Actions column usually shouldn't be hidden or at least handled carefully
+                .map((column) => {
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={column.key}
+                      className="capitalize"
+                      checked={visibleColumns[column.key]}
+                      onCheckedChange={(checked) =>
+                        setVisibleColumns((prev) => ({ ...prev, [column.key]: !!checked }))
+                      }
+                    >
+                      {column.label}
+                    </DropdownMenuCheckboxItem>
+                  )
+                })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -379,11 +445,11 @@ export default function ProjectsPage() {
           {(searchTerm ||
             selectedDepartment !== "all" ||
             selectedStatus !== "all") && (
-            <span className="text-blue-600">
-              {" "}
-              ({t("common.filteredFrom")} {projects.length} {t("common.projects")})
-            </span>
-          )}
+              <span className="text-blue-600">
+                {" "}
+                ({t("common.filteredFrom")} {projects.length} {t("common.projects")})
+              </span>
+            )}
         </div>
         <Pagination
           currentPage={pagination.currentPage}

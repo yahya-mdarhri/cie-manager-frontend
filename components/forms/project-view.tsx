@@ -292,12 +292,14 @@ export default function ProjectViewModal({
     type: "encaissement" | "depense"
     category: string
     reference?: string
+    date: string
   }>({
     description: "",
     amount: "",
     type: "encaissement",
     category: "",
     reference: "",
+    date: new Date().toISOString().split("T")[0],
   })
 
   // Fetch master data (suppliers, clients) on mount
@@ -533,7 +535,7 @@ export default function ProjectViewModal({
         pdf.line(margin, y, pageWidth - margin, y)
         y += 6
       }
-    } catch {}
+    } catch { }
 
     // Header text (placed below logo, not on the same line)
     pdf.setFont("helvetica", "bold")
@@ -568,7 +570,7 @@ export default function ProjectViewModal({
     const fmtCurrency = (v: number) =>
       new Intl.NumberFormat("fr-MA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + " MAD"
     const total = Number(budget.total || 0)
-  const engaged = Number(engagedBudget || 0)
+    const engaged = Number(engagedBudget || 0)
     const available = Math.max(0, total - engaged - Number(spentBudget || 0))
     pdf.setFont("helvetica", "bold")
     pdf.setFontSize(12)
@@ -577,7 +579,7 @@ export default function ProjectViewModal({
     pdf.setFont("helvetica", "normal")
     pdf.setFontSize(11)
     pdf.text(`Total: ${fmtCurrency(total)}`, margin, y)
-  pdf.text(`Encaissé: ${fmtCurrency(engaged)}`, pageWidth / 2, y)
+    pdf.text(`Encaissé: ${fmtCurrency(engaged)}`, pageWidth / 2, y)
     y += 6
     pdf.text(`Disponible: ${fmtCurrency(available)}`, margin, y)
     y += 10
@@ -806,7 +808,7 @@ export default function ProjectViewModal({
             setActiveTab("edit")
             return
           }
-        } catch {}
+        } catch { }
       }
       setUpdatingStatus(true)
       const { data: updated } = await http.patch(
@@ -875,7 +877,7 @@ export default function ProjectViewModal({
           const payload = {
             description: newTransaction.description,
             amount: Number.parseFloat(newTransaction.amount),
-            expense_date: new Date().toISOString().split("T")[0],
+            expense_date: newTransaction.date || new Date().toISOString().split("T")[0],
             category: normalizeCategory(newTransaction.category),
             supplier: "",
             invoice_reference: "",
@@ -921,7 +923,7 @@ export default function ProjectViewModal({
             }))
           setTransactions([...mappedExpenses, ...mappedPayments])
           // reset form for another expense
-          setNewTransaction({ description: "", amount: "", type: "depense", category: "" })
+          setNewTransaction({ description: "", amount: "", type: "depense", category: "", date: new Date().toISOString().split("T")[0] })
           setNewExpenseSupplierId(null)
           showFlash(`${t("dashboard.models.expense")}: ${t("messages.createSuccess")}`)
         } catch (err) {
@@ -931,7 +933,7 @@ export default function ProjectViewModal({
           alert(typeof msg === "string" ? msg : t("projectView.errors.createExpense"))
         }
       })()
-  } else {
+    } else {
       // Create payment received (encaissement)
       (async () => {
         try {
@@ -946,7 +948,7 @@ export default function ProjectViewModal({
           }
           const payload = {
             amount: Number.parseFloat(newTransaction.amount),
-            payment_received_date: new Date().toISOString().split("T")[0],
+            payment_received_date: newTransaction.date || new Date().toISOString().split("T")[0],
             payment_type: normalizePaymentType(newTransaction.category),
             payment_reference: newTransaction.reference || newTransaction.description || "REF",
             description: newTransaction.description || "",
@@ -991,7 +993,7 @@ export default function ProjectViewModal({
               document_path: null,
             }))
           setTransactions([...mappedExpenses, ...mappedPayments])
-          setNewTransaction({ description: "", amount: "", type: "encaissement", category: "", reference: "" })
+          setNewTransaction({ description: "", amount: "", type: "encaissement", category: "", reference: "", date: new Date().toISOString().split("T")[0] })
           showFlash(`${t("dashboard.models.paymentreceived")}: ${t("messages.createSuccess")}`)
         } catch (err) {
           console.error("Failed to create payment:", err)
@@ -1004,7 +1006,7 @@ export default function ProjectViewModal({
   }
 
   const handleDeleteTransaction = (id: number, kind: "encaissement" | "depense") => {
-    ;(async () => {
+    ; (async () => {
       try {
         if (!project.id || !depId) throw new Error("Project context missing")
         // choose endpoint by explicit type to avoid id collision issues
@@ -1068,7 +1070,7 @@ export default function ProjectViewModal({
     const file = event.target.files?.[0]
     if (file) {
       // upload contract document to project via PATCH
-      ;(async () => {
+      ; (async () => {
         try {
           if (!project.id || !depId) throw new Error("Project context missing")
           const fd = new FormData()
@@ -1173,7 +1175,7 @@ export default function ProjectViewModal({
                   </Select>
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="startDate">{t("expenses.startDate")}</Label>
@@ -1207,7 +1209,7 @@ export default function ProjectViewModal({
               </div>
               <div className="flex gap-2">
                 <Button onClick={handleSaveEdit}>{t("common.save")}</Button>
-                <Button  onClick={() => setActiveTab("details")}>
+                <Button onClick={() => setActiveTab("details")}>
                   {t("common.cancel")}
                 </Button>
               </div>
@@ -1231,7 +1233,12 @@ export default function ProjectViewModal({
 
             <div className="mb-6 p-4 bg-muted rounded-lg">
               <h4 className="font-medium mb-3">{t("projectView.revenues.addTitle")}</h4>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                <Input
+                  type="date"
+                  value={newTransaction.date}
+                  onChange={(e) => setNewTransaction({ ...newTransaction, date: e.target.value })}
+                />
                 <Input
                   placeholder={t("projectView.revenues.description")}
                   value={newTransaction.description}
@@ -1299,7 +1306,7 @@ export default function ProjectViewModal({
 
       case "jalons":
         return (
-          <JalonManagement 
+          <JalonManagement
             projectId={project.id!}
             departmentId={depId!}
             projectEndDate={editedProject.endDate}
@@ -1320,15 +1327,20 @@ export default function ProjectViewModal({
           <Card className="p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">{t("projectView.expenses.title")}</h3>
-                <div className="text-right">
-                  <p className="text-sm text-muted-foreground">{t("projectView.expenses.total")}</p>
+              <div className="text-right">
+                <p className="text-sm text-muted-foreground">{t("projectView.expenses.total")}</p>
                 <p className="text-xl font-bold text-red-600">{formatCurrency(totalDepenses)}</p>
               </div>
             </div>
 
             <div className="mb-6 p-4 bg-muted rounded-lg">
               <h4 className="font-medium mb-3">{t("projectView.expenses.addTitle")}</h4>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                <Input
+                  type="date"
+                  value={newTransaction.date}
+                  onChange={(e) => setNewTransaction({ ...newTransaction, date: e.target.value })}
+                />
                 <Select
                   value={newExpenseSupplierId?.toString() || "none"}
                   onValueChange={(v) => setNewExpenseSupplierId(v === "none" ? null : Number(v))}
@@ -1409,7 +1421,7 @@ export default function ProjectViewModal({
                         <div className="font-semibold text-red-600">-{formatCurrency(transaction.amount)}</div>
                       </div>
                       {transaction.document_path ? (
-                        <Button size="sm" className="mr-2" onClick={() => window.open(transaction.document_path || "", "_blank") }>
+                        <Button size="sm" className="mr-2" onClick={() => window.open(transaction.document_path || "", "_blank")}>
                           <FileText className="h-4 w-4" />
                         </Button>
                       ) : null}
@@ -1462,7 +1474,7 @@ export default function ProjectViewModal({
                         <Eye className="h-3 w-3 mr-1" />
                         {t("projectView.documents.view")}
                       </Button>
-                      <Button size="sm" onClick={() => doc.url && window.open(doc.url, "_blank") }>
+                      <Button size="sm" onClick={() => doc.url && window.open(doc.url, "_blank")}>
                         <Download className="h-3 w-3" />
                       </Button>
                       <Button size="sm" className="text-red-600" onClick={() => handleDeleteDocument(doc)}>
@@ -1502,7 +1514,7 @@ export default function ProjectViewModal({
           </div>
         ) : null}
         {/* Hidden print layout removed; export is drawn directly with jsPDF */}
-  <div className="bg-card rounded-t-xl p-6 pr-14 border-b">
+        <div className="bg-card rounded-t-xl p-6 pr-14 border-b">
           <button onClick={onClose} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
             <X className="h-5 w-5" />
           </button>
@@ -1582,7 +1594,7 @@ export default function ProjectViewModal({
                 {clientMaster ? (
                   <p className="text-xs text-muted-foreground">{clientMaster}</p>
                 ) : null}
-                
+
               </div>
             </div>
           </div>
@@ -1596,7 +1608,7 @@ export default function ProjectViewModal({
                 const now = new Date()
                 const diffMs = end.getTime() - now.getTime()
                 daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-              } catch {}
+              } catch { }
             }
             const overdue = typeof daysLeft === "number" && daysLeft < 0
             const msg = (() => {
@@ -1627,7 +1639,7 @@ export default function ProjectViewModal({
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-2">
             <Button
-              
+
               size="sm"
               onClick={() => setActiveTab("details")}
             >
@@ -1635,7 +1647,7 @@ export default function ProjectViewModal({
               {t("projectView.tabs.details")}
             </Button>
             <Button
-             
+
               size="sm"
               onClick={() => setActiveTab("edit")}
             >
@@ -1643,7 +1655,7 @@ export default function ProjectViewModal({
               {t("projectView.tabs.edit")}
             </Button>
             <Button
-              
+
               size="sm"
               onClick={() => setActiveTab("jalons")}
             >
@@ -1651,7 +1663,7 @@ export default function ProjectViewModal({
               {t("projectView.tabs.milestones")}
             </Button>
             <Button
-              
+
               size="sm"
               onClick={() => setActiveTab("encaissements")}
             >
@@ -1659,7 +1671,7 @@ export default function ProjectViewModal({
               {t("projectView.tabs.revenues")}
             </Button>
             <Button
-             
+
               size="sm"
               onClick={() => setActiveTab("depenses")}
             >
@@ -1667,7 +1679,7 @@ export default function ProjectViewModal({
               {t("projectView.tabs.expenses")}
             </Button>
             <Button
-    
+
               size="sm"
               onClick={() => setActiveTab("documents")}
             >
@@ -1769,9 +1781,8 @@ export default function ProjectViewModal({
                     {project.timeline.map((step, index) => (
                       <div key={index} className="flex flex-col items-center space-y-2 min-w-[100px]">
                         <div
-                          className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                            step.completed ? "bg-primary/20" : "bg-muted"
-                          }`}
+                          className={`w-12 h-12 rounded-full flex items-center justify-center ${step.completed ? "bg-primary/20" : "bg-muted"
+                            }`}
                         >
                           <User className={`h-6 w-6 ${step.completed ? "text-primary" : "text-muted-foreground"}`} />
                         </div>
