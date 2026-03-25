@@ -1,7 +1,7 @@
 import axios from "axios"
 
 export const http = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000",
+  baseURL: process.env.NEXT_PUBLIC_API_BASE || "http://192.168.1.171:12000",
   withCredentials: true,
   // Avoid custom headers that can trigger stricter CORS preflight unless needed
 })
