@@ -21,6 +21,11 @@ export interface ActivityLog {
   user_agent: string | null
 }
 
+interface ActivityLogResponse {
+  results?: ActivityLog[]
+  count?: number
+}
+
 export function useRecentActivity(limit: number = 20, autoRefresh: boolean = false) {
   const [activities, setActivities] = useState<ActivityLog[]>([])
   const [loading, setLoading] = useState(true)
@@ -28,12 +33,18 @@ export function useRecentActivity(limit: number = 20, autoRefresh: boolean = fal
 
   const fetchActivities = async () => {
     try {
-      const { data } = await http.get<ActivityLog[]>("/api/management/recent-activity/", {
-        params: { limit }
+      const { data } = await http.get<ActivityLog[] | ActivityLogResponse>('/api/management/action-logs/', {
+        params: { page: 1, size: limit }
       })
-  // Normalize presence of user_name fallback
-  const list = Array.isArray(data) ? data : []
-  setActivities(list.map(a => ({ ...a, user_name: a.user_name || a.user_email })))
+      const list = Array.isArray(data) ? data : (Array.isArray(data?.results) ? data.results : [])
+      setActivities(
+        list.map((activity) => ({
+          ...activity,
+          user_name: activity.user_name || activity.user_email,
+          content_type: String(activity.content_type || "").toLowerCase(),
+          model_name: String(activity.model_name || "").toLowerCase(),
+        }))
+      )
       setError(null)
     } catch (err: any) {
       console.error("Failed to fetch recent activity:", err)

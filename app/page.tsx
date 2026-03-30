@@ -15,7 +15,7 @@ import CreateDepartmentForm from "@/components/forms/create-department-form"
 import CreateManagerForm from "@/components/forms/create-manager-form"
 import CreateClientForm from "@/components/forms/create-client-form"
 import CreateSupplierForm from "@/components/forms/create-supplier-form"
-import { useRecentActivity } from "@/hooks/use-recent-activity"
+import { useRecentActivity, type ActivityLog } from "@/hooks/use-recent-activity"
 import { useRouter } from "next/navigation"
 
 interface DirectorAnalytics {
@@ -166,12 +166,20 @@ export default function Dashboard() {
         const map: Record<string, string> = { CREATE: "created", UPDATE: "updated", DELETE: "deleted" }
         return map[action] || action.toLowerCase()
       }
-      const activityHref = (contentType: string, objectName: string) => {
-        if (contentType === "paymentreceived") return "/revenues"
-        if (contentType === "expense") return "/expenses"
-        if (contentType === "project" || contentType === "projectsteps") {
-          const q = encodeURIComponent(objectName || "")
-          return q ? `/projects?q=${q}` : "/projects"
+      const activityHref = (activity: ActivityLog) => {
+        const modelName = String(activity.model_name || activity.content_type || "").toLowerCase()
+        const objectName = String(activity.object_name || "")
+        const objectId = String(activity.object_id || "")
+        const projectCodeMatch = objectName.match(/[A-Z0-9]{6}/)
+        const projectQuery = encodeURIComponent(projectCodeMatch?.[0] || objectName || objectId)
+
+        if (modelName === "paymentreceived" || modelName === "payment_received") return "/revenues"
+        if (modelName === "expense") return "/expenses"
+        if (modelName === "project") {
+          return projectQuery ? `/projects?q=${projectQuery}` : "/projects"
+        }
+        if (modelName === "projectsteps" || modelName === "project_step" || modelName === "projectsteps") {
+          return projectQuery ? `/projects?q=${projectQuery}` : "/projects"
         }
         return "/projects"
       }
@@ -184,7 +192,7 @@ export default function Dashboard() {
           }),
           subtitle: `${a.object_name} • ${a.user_name || a.user_email} • ${formatRelative(a.timestamp)}`,
           color: colorFor(a.content_type),
-          href: activityHref(a.content_type, a.object_name)
+          href: activityHref(a)
         }
       })
       setRecent(mapped.slice(0, 6))
