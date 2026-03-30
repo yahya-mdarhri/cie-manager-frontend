@@ -1,0 +1,11 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://192.168.1.171:12000}
+    container_name: cie_manager_frontend
+    ports:
+      - "12001:12001"
+    restart: unless-stopped
