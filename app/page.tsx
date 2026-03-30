@@ -195,7 +195,7 @@ export default function Dashboard() {
           href: activityHref(a)
         }
       })
-      setRecent(mapped.slice(0, 6))
+      setRecent(mapped.slice(0, 5))
     }
     load()
   }, [user, reloadKey, language, activities])
@@ -358,18 +358,18 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4 max-h-56 overflow-y-auto sm:max-h-none sm:overflow-visible pr-1">
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
               {recent.map((it, idx) => (
-                <button type="button" key={idx} onClick={() => router.push(it.href)} className="flex w-full cursor-pointer items-center justify-between rounded-lg bg-muted/50 p-3 text-left hover:bg-muted transition-colors">
+                <button type="button" key={idx} onClick={() => router.push(it.href)} className="flex w-full cursor-pointer items-center justify-between rounded-md bg-muted/50 p-2 text-left hover:bg-muted transition-colors">
                   <div>
-                    <p className="font-medium">{it.title}</p>
-                    <p className="text-sm text-muted-foreground truncate max-w-[70vw] sm:max-w-none">{it.subtitle}</p>
+                    <p className="text-sm font-medium leading-tight">{it.title}</p>
+                    <p className="text-xs text-muted-foreground truncate max-w-[70vw] sm:max-w-none">{it.subtitle}</p>
                   </div>
                   <div className={`h-2 w-2 rounded-full ${it.color === "green" ? "bg-green-500" : it.color === "purple" ? "bg-purple-500" : it.color === "gray" ? "bg-gray-500" : "bg-blue-500"}`}></div>
                 </button>
               ))}
               {recent.length === 0 && (
-                <p className="text-sm text-muted-foreground">{t("dashboard.noRecentActivity")}</p>
+                <p className="text-xs text-muted-foreground">{t("dashboard.noRecentActivity")}</p>
               )}
             </div>
           </CardContent>
