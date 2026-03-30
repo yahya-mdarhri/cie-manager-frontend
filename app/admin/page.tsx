@@ -45,6 +45,40 @@ interface User {
   created_at: string
 }
 
+interface DirectorAnalytics {
+  kpis?: {
+    overdue_projects: number
+    completed_unpaid_projects: number
+    overdue_unpaid_projects: number
+    overdue_unpaid_amount: number
+    collection_rate_percent: number
+    total_collected: number
+    total_spent: number
+    margin_value: number
+  }
+  projects_needing_attention?: Array<{
+    project_id: number
+    project_code: string
+    project_name: string
+    department?: string | null
+    status: string
+    end_date?: string | null
+    days_overdue: number
+    total_budget: number
+    total_collected: number
+    total_spent: number
+    remaining_to_collect: number
+    client?: string | null
+  }>
+  top_clients_exposure?: Array<{
+    client: string
+    projects_count: number
+    budget: number
+    collected: number
+    remaining_to_collect: number
+  }>
+}
+
 export default function AdminPage() {
   const { user } = useAuth()
   const { t } = useLanguage()
@@ -57,6 +91,7 @@ export default function AdminPage() {
   const [loadingDepartments, setLoadingDepartments] = useState(false)
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [activeTab, setActiveTab] = useState<"departments" | "users">("departments")
+  const [analytics, setAnalytics] = useState<DirectorAnalytics | null>(null)
 
   // Column definitions with translations
   const departmentColumns = [
@@ -178,10 +213,20 @@ export default function AdminPage() {
       })
       const managersData = managersResponse.data?.results || managersResponse.data || []
       setManagersCount(Array.isArray(managersData) ? managersData.length : managersResponse.data?.count || 0)
+
+      try {
+        const analyticsResponse = await http.get("/api/management/all/statistics/")
+        setAnalytics(analyticsResponse.data || null)
+      } catch (error) {
+        console.warn("Failed to load analytics:", error)
+      }
     } catch (error) {
       console.error("Error loading statistics:", error)
     }
   }
+
+  const formatMAD = (value?: number) =>
+    Number(value || 0).toLocaleString("fr-FR", { style: "currency", currency: "MAD" })
 
   useEffect(() => {
     if (user && user.role === "director") {
@@ -425,6 +470,102 @@ export default function AdminPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* DG Analytics */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Alertes DG - Déblocage prioritaire</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-md border p-3">
+                <div className="text-muted-foreground">Projets en retard</div>
+                <div className="text-xl font-semibold text-red-600">{analytics?.kpis?.overdue_projects ?? 0}</div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="text-muted-foreground">Terminés non soldés</div>
+                <div className="text-xl font-semibold text-amber-600">{analytics?.kpis?.completed_unpaid_projects ?? 0}</div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="text-muted-foreground">Retard + non encaissé</div>
+                <div className="text-xl font-semibold text-red-700">{analytics?.kpis?.overdue_unpaid_projects ?? 0}</div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="text-muted-foreground">Montant à risque</div>
+                <div className="text-lg font-semibold text-red-700">{formatMAD(analytics?.kpis?.overdue_unpaid_amount)}</div>
+              </div>
+            </div>
+
+            <div className="text-xs text-muted-foreground">
+              Taux d'encaissement global: <span className="font-medium text-foreground">{analytics?.kpis?.collection_rate_percent ?? 0}%</span>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Marge globale (encaissé - dépensé): <span className="font-medium text-foreground">{formatMAD(analytics?.kpis?.margin_value)}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Top clients exposés (reste à encaisser)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {(analytics?.top_clients_exposure || []).slice(0, 5).map((item) => (
+              <div key={item.client} className="flex items-center justify-between rounded-md border p-3 text-sm">
+                <div>
+                  <div className="font-medium">{item.client}</div>
+                  <div className="text-xs text-muted-foreground">{item.projects_count} projets</div>
+                </div>
+                <div className="text-right">
+                  <div className="font-semibold text-red-700">{formatMAD(item.remaining_to_collect)}</div>
+                  <div className="text-xs text-muted-foreground">Encaissé: {formatMAD(item.collected)}</div>
+                </div>
+              </div>
+            ))}
+            {(!analytics?.top_clients_exposure || analytics.top_clients_exposure.length === 0) && (
+              <div className="text-sm text-muted-foreground">Aucune exposition client critique.</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Projets nécessitant une action immédiate</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {(analytics?.projects_needing_attention || []).slice(0, 8).map((item) => (
+              <div key={item.project_id} className="grid grid-cols-1 md:grid-cols-6 gap-2 rounded-md border p-3 text-sm">
+                <div className="md:col-span-2">
+                  <div className="font-medium">{item.project_code} - {item.project_name}</div>
+                  <div className="text-xs text-muted-foreground">{item.department || "-"} • Client: {item.client || "-"}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Statut</div>
+                  <Badge variant={item.status === "Completed" ? "secondary" : "destructive"}>{item.status}</Badge>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Jours retard</div>
+                  <div className="font-semibold">{item.days_overdue}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Reste à encaisser</div>
+                  <div className="font-semibold text-red-700">{formatMAD(item.remaining_to_collect)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Dépensé / Budget</div>
+                  <div className="font-semibold">{formatMAD(item.total_spent)} / {formatMAD(item.total_budget)}</div>
+                </div>
+              </div>
+            ))}
+            {(!analytics?.projects_needing_attention || analytics.projects_needing_attention.length === 0) && (
+              <div className="text-sm text-muted-foreground">Aucune alerte critique pour le moment.</div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Tab Navigation */}
       <div className="flex space-x-2 border-b">
