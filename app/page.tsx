@@ -16,6 +16,7 @@ import CreateManagerForm from "@/components/forms/create-manager-form"
 import CreateClientForm from "@/components/forms/create-client-form"
 import CreateSupplierForm from "@/components/forms/create-supplier-form"
 import { useRecentActivity } from "@/hooks/use-recent-activity"
+import { useRouter } from "next/navigation"
 
 interface DirectorAnalytics {
   kpis?: {
@@ -47,6 +48,7 @@ interface DirectorAnalytics {
 export default function Dashboard() {
   const { user } = useAuth()
   const { t, language } = useLanguage()
+  const router = useRouter()
   const [reloadKey, setReloadKey] = useState(0)
   const [metrics, setMetrics] = useState({
     projects: 0,
@@ -54,7 +56,7 @@ export default function Dashboard() {
     committedBudget: 0,
     remainingBudget: 0,
   })
-  const [recent, setRecent] = useState<Array<{ title: string; subtitle: string; color: string }>>([])
+  const [recent, setRecent] = useState<Array<{ title: string; subtitle: string; color: string; href: string }>>([])
   const { activities, loading: activityLoading, error: activityError, refetch } = useRecentActivity(20)
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({
     "In Progress": 0,
@@ -164,6 +166,15 @@ export default function Dashboard() {
         const map: Record<string, string> = { CREATE: "created", UPDATE: "updated", DELETE: "deleted" }
         return map[action] || action.toLowerCase()
       }
+      const activityHref = (contentType: string, objectName: string) => {
+        if (contentType === "paymentreceived") return "/revenues"
+        if (contentType === "expense") return "/expenses"
+        if (contentType === "project" || contentType === "projectsteps") {
+          const q = encodeURIComponent(objectName || "")
+          return q ? `/projects?q=${q}` : "/projects"
+        }
+        return "/projects"
+      }
       const mapped = (activities || []).map(a => {
         const ak = actionKey(a.action)
         return {
@@ -172,7 +183,8 @@ export default function Dashboard() {
             model: t(`dashboard.models.${a.content_type}`)
           }),
           subtitle: `${a.object_name} • ${a.user_name || a.user_email} • ${formatRelative(a.timestamp)}`,
-          color: colorFor(a.content_type)
+          color: colorFor(a.content_type),
+          href: activityHref(a.content_type, a.object_name)
         }
       })
       setRecent(mapped.slice(0, 6))
@@ -209,22 +221,30 @@ export default function Dashboard() {
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard title={t("dashboard.activeProjects")} value={String(metrics.projects)}  trend={{ value: 0, isPositive: true }} />
-        <MetricCard
-          title={t("dashboard.totalBudget")}
-          value={fmt(metrics.totalBudget)}
-          trend={{ value: 0, isPositive: true }}
-        />
-        <MetricCard
-          title={t("dashboard.budgetEngaged")}
-          value={fmt(metrics.committedBudget)}
-          trend={{ value: 0, isPositive: true }}
-        />
-        <MetricCard
-          title={t("dashboard.remainingBudget")}
-          value={fmt(metrics.remainingBudget)}
-          trend={{ value: 0, isPositive: false }}
-        />
+        <button type="button" onClick={() => router.push("/projects")} className="text-left">
+          <MetricCard title={t("dashboard.activeProjects")} value={String(metrics.projects)}  trend={{ value: 0, isPositive: true }} />
+        </button>
+        <button type="button" onClick={() => router.push("/projects")} className="text-left">
+          <MetricCard
+            title={t("dashboard.totalBudget")}
+            value={fmt(metrics.totalBudget)}
+            trend={{ value: 0, isPositive: true }}
+          />
+        </button>
+        <button type="button" onClick={() => router.push("/revenues")} className="text-left">
+          <MetricCard
+            title={t("dashboard.budgetEngaged")}
+            value={fmt(metrics.committedBudget)}
+            trend={{ value: 0, isPositive: true }}
+          />
+        </button>
+        <button type="button" onClick={() => router.push("/expenses")} className="text-left">
+          <MetricCard
+            title={t("dashboard.remainingBudget")}
+            value={fmt(metrics.remainingBudget)}
+            trend={{ value: 0, isPositive: false }}
+          />
+        </button>
       </div>
 
       {user?.role === "director" && (
@@ -236,22 +256,22 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-md border p-3">
+                  <button type="button" onClick={() => router.push("/projects?risk=overdue")} className="rounded-md border p-3 text-left hover:bg-muted/40 transition-colors">
                     <div className="text-muted-foreground">Projets en retard</div>
                     <div className="text-xl font-semibold text-red-600">{analytics?.kpis?.overdue_projects ?? 0}</div>
-                  </div>
-                  <div className="rounded-md border p-3">
+                  </button>
+                  <button type="button" onClick={() => router.push("/projects?risk=completed_unpaid")} className="rounded-md border p-3 text-left hover:bg-muted/40 transition-colors">
                     <div className="text-muted-foreground">Terminés non soldés</div>
                     <div className="text-xl font-semibold text-amber-600">{analytics?.kpis?.completed_unpaid_projects ?? 0}</div>
-                  </div>
-                  <div className="rounded-md border p-3">
+                  </button>
+                  <button type="button" onClick={() => router.push("/projects?risk=overdue_unpaid")} className="rounded-md border p-3 text-left hover:bg-muted/40 transition-colors">
                     <div className="text-muted-foreground">Retard + non encaissé</div>
                     <div className="text-xl font-semibold text-red-700">{analytics?.kpis?.overdue_unpaid_projects ?? 0}</div>
-                  </div>
-                  <div className="rounded-md border p-3">
+                  </button>
+                  <button type="button" onClick={() => router.push("/projects?risk=overdue_unpaid")} className="rounded-md border p-3 text-left hover:bg-muted/40 transition-colors">
                     <div className="text-muted-foreground">Montant à risque</div>
                     <div className="text-lg font-semibold text-red-700">{fmt(analytics?.kpis?.overdue_unpaid_amount || 0)}</div>
-                  </div>
+                  </button>
                 </div>
 
                 <div className="text-xs text-muted-foreground">
@@ -269,7 +289,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {(analytics?.top_clients_exposure || []).slice(0, 5).map((item) => (
-                  <div key={item.client} className="flex items-center justify-between rounded-md border p-3 text-sm">
+                  <button type="button" key={item.client} onClick={() => router.push(`/projects?q=${encodeURIComponent(item.client)}`)} className="flex w-full items-center justify-between rounded-md border p-3 text-left text-sm hover:bg-muted/40 transition-colors">
                     <div>
                       <div className="font-medium">{item.client}</div>
                       <div className="text-xs text-muted-foreground">{item.projects_count} projets</div>
@@ -278,7 +298,7 @@ export default function Dashboard() {
                       <div className="font-semibold text-red-700">{fmt(item.remaining_to_collect)}</div>
                       <div className="text-xs text-muted-foreground">Encaissé: {fmt(item.collected)}</div>
                     </div>
-                  </div>
+                  </button>
                 ))}
                 {(!analytics?.top_clients_exposure || analytics.top_clients_exposure.length === 0) && (
                   <div className="text-sm text-muted-foreground">Aucune exposition client critique.</div>
@@ -294,7 +314,7 @@ export default function Dashboard() {
             <CardContent>
               <div className="space-y-2">
                 {(analytics?.projects_needing_attention || []).slice(0, 6).map((item) => (
-                  <div key={item.project_id} className="grid grid-cols-1 md:grid-cols-4 gap-2 rounded-md border p-3 text-sm">
+                  <button type="button" key={item.project_id} onClick={() => router.push(`/projects?q=${encodeURIComponent(item.project_code)}`)} className="grid w-full grid-cols-1 md:grid-cols-4 gap-2 rounded-md border p-3 text-left text-sm hover:bg-muted/40 transition-colors">
                     <div className="md:col-span-2">
                       <div className="font-medium">{item.project_code} - {item.project_name}</div>
                       <div className="text-xs text-muted-foreground">{item.department || "-"} • Client: {item.client || "-"}</div>
@@ -307,7 +327,7 @@ export default function Dashboard() {
                       <div className="text-xs text-muted-foreground">Reste à encaisser</div>
                       <div className="font-semibold text-red-700">{fmt(item.remaining_to_collect)}</div>
                     </div>
-                  </div>
+                  </button>
                 ))}
                 {(!analytics?.projects_needing_attention || analytics.projects_needing_attention.length === 0) && (
                   <div className="text-sm text-muted-foreground">Aucune alerte critique pour le moment.</div>
@@ -332,13 +352,13 @@ export default function Dashboard() {
           <CardContent>
             <div className="space-y-4 max-h-56 overflow-y-auto sm:max-h-none sm:overflow-visible pr-1">
               {recent.map((it, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <button type="button" key={idx} onClick={() => router.push(it.href)} className="flex w-full items-center justify-between p-3 bg-muted/50 rounded-lg text-left hover:bg-muted transition-colors">
                   <div>
                     <p className="font-medium">{it.title}</p>
                     <p className="text-sm text-muted-foreground truncate max-w-[70vw] sm:max-w-none">{it.subtitle}</p>
                   </div>
                   <div className={`h-2 w-2 rounded-full ${it.color === "green" ? "bg-green-500" : it.color === "purple" ? "bg-purple-500" : it.color === "gray" ? "bg-gray-500" : "bg-blue-500"}`}></div>
-                </div>
+                </button>
               ))}
               {recent.length === 0 && (
                 <p className="text-sm text-muted-foreground">{t("dashboard.noRecentActivity")}</p>
@@ -353,34 +373,34 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <button type="button" onClick={() => router.push("/projects?status=In%20Progress")} className="flex w-full items-center justify-between rounded-md p-1 text-left hover:bg-muted/40 transition-colors">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 bg-green-500 rounded-full"></div>
                   <span>{t("status.inProgress")}</span>
                 </div>
                 <span className="font-medium">{statusCounts["In Progress"]} {statusCounts["In Progress"] === 1 ? t("common.units.project.singular") : t("common.units.project.plural")}</span>
-              </div>
-              <div className="flex items-center justify-between">
+              </button>
+              <button type="button" onClick={() => router.push("/projects?status=Paused")} className="flex w-full items-center justify-between rounded-md p-1 text-left hover:bg-muted/40 transition-colors">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 bg-yellow-500 rounded-full"></div>
                   <span>{t("common.onPause")}</span>
                 </div>
                 <span className="font-medium">{statusCounts["Paused"]} {statusCounts["Paused"] === 1 ? t("common.units.project.singular") : t("common.units.project.plural")}</span>
-              </div>
-              <div className="flex items-center justify-between">
+              </button>
+              <button type="button" onClick={() => router.push("/projects?status=Completed")} className="flex w-full items-center justify-between rounded-md p-1 text-left hover:bg-muted/40 transition-colors">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 bg-blue-500 rounded-full"></div>
                   <span>{t("status.completed")}</span>
                 </div>
                 <span className="font-medium">{statusCounts["Completed"]} {statusCounts["Completed"] === 1 ? t("common.units.project.singular") : t("common.units.project.plural")}</span>
-              </div>
-              <div className="flex items-center justify-between">
+              </button>
+              <button type="button" onClick={() => router.push("/projects?status=Cancelled")} className="flex w-full items-center justify-between rounded-md p-1 text-left hover:bg-muted/40 transition-colors">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 bg-red-500 rounded-full"></div>
                   <span>{t("status.cancelled")}</span>
                 </div>
                 <span className="font-medium">{statusCounts["Cancelled"]} {statusCounts["Cancelled"] === 1 ? t("common.units.project.singular") : t("common.units.project.plural")}</span>
-              </div>
+              </button>
             </div>
           </CardContent>
         </Card>

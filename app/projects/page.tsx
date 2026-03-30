@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +57,7 @@ async function fetchProjectsForUser(
         style: "currency",
         currency: "MAD",
       }),
+      remainingBudgetValue: Number(p.remaining_budget || 0),
       status: p.status,
       client: p.client_display || p.client_name || "-",
       // no project-level supplier
@@ -106,6 +108,7 @@ const base = "/api/management";
 export default function ProjectsPage() {
   const { user } = useAuth();
   const { t } = useLanguage();
+  const searchParams = useSearchParams();
   const { pagination, goToPage, updateFromResponse } = usePagination(10);
   const [projects, setProjects] = useState(initialProjectData);
   const [filteredProjects, setFilteredProjects] = useState(initialProjectData);
@@ -133,6 +136,7 @@ export default function ProjectsPage() {
   const [selectedDepartment, setSelectedDepartment] = useState("all");
   const [departments, setDepartments] = useState<Array<{ id: number; name: string }>>([]);
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [selectedRisk, setSelectedRisk] = useState("all");
   const [viewingProject, setViewingProject] = useState<any | null>(null);
 
   // Column visibility state
@@ -189,6 +193,18 @@ export default function ProjectsPage() {
     reload();
   }, [user, pagination.currentPage, pagination.pageSize]);
 
+  useEffect(() => {
+    const q = searchParams.get("q") || "";
+    const status = searchParams.get("status") || "all";
+    const department = searchParams.get("department") || "all";
+    const risk = searchParams.get("risk") || "all";
+
+    setSearchTerm(q);
+    setSelectedStatus(status);
+    setSelectedDepartment(department);
+    setSelectedRisk(risk);
+  }, [searchParams]);
+
   // Fetch departments dynamically from backend for filter (director only or if needed globally)
   useEffect(() => {
     const fetchDepartments = async () => {
@@ -221,7 +237,8 @@ export default function ProjectsPage() {
         (project) =>
           project.code.toLowerCase().includes(term) ||
           project.name.toLowerCase().includes(term) ||
-          project.coordinator.toLowerCase().includes(term),
+          project.coordinator.toLowerCase().includes(term) ||
+          String(project.client || "").toLowerCase().includes(term),
       );
     }
 
@@ -237,8 +254,27 @@ export default function ProjectsPage() {
       );
     }
 
+    if (selectedRisk !== "all") {
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      filtered = filtered.filter((project: any) => {
+        const endDate = project.endDate ? new Date(project.endDate) : null;
+        if (endDate) {
+          endDate.setHours(0, 0, 0, 0);
+        }
+        const isOverdue = !!endDate && endDate < now && project.statusCode !== "Completed" && project.statusCode !== "Cancelled";
+        const isCompletedUnpaid = project.statusCode === "Completed" && Number(project.remainingBudgetValue || 0) > 0;
+        const isOverdueUnpaid = isOverdue && Number(project.remainingBudgetValue || 0) > 0;
+
+        if (selectedRisk === "overdue") return isOverdue;
+        if (selectedRisk === "completed_unpaid") return isCompletedUnpaid;
+        if (selectedRisk === "overdue_unpaid") return isOverdueUnpaid;
+        return true;
+      });
+    }
+
     setFilteredProjects(filtered);
-  }, [projects, searchTerm, selectedDepartment, selectedStatus]);
+  }, [projects, searchTerm, selectedDepartment, selectedStatus, selectedRisk]);
 
   const handlePageChange = (page: number) => {
     goToPage(page);
@@ -444,7 +480,8 @@ export default function ProjectsPage() {
           {pagination.totalCount} {t("common.total")}
           {(searchTerm ||
             selectedDepartment !== "all" ||
-            selectedStatus !== "all") && (
+            selectedStatus !== "all" ||
+            selectedRisk !== "all") && (
               <span className="text-blue-600">
                 {" "}
                 ({t("common.filteredFrom")} {projects.length} {t("common.projects")})
