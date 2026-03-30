@@ -44,33 +44,6 @@ interface Supplier {
   total_expense?: number
 }
 
-interface DirectorAnalytics {
-  kpis?: {
-    overdue_projects: number
-    completed_unpaid_projects: number
-    overdue_unpaid_projects: number
-    overdue_unpaid_amount: number
-    collection_rate_percent: number
-    margin_value: number
-  }
-  projects_needing_attention?: Array<{
-    project_id: number
-    project_code: string
-    project_name: string
-    department?: string | null
-    status: string
-    days_overdue: number
-    remaining_to_collect: number
-    client?: string | null
-  }>
-  top_clients_exposure?: Array<{
-    client: string
-    projects_count: number
-    remaining_to_collect: number
-    collected: number
-  }>
-}
-
 export default function MasterDataPage() {
   const { user } = useAuth()
   const { t, language } = useLanguage()
@@ -95,7 +68,6 @@ export default function MasterDataPage() {
   const [activeSupplier, setActiveSupplier] = useState<Supplier | null>(null)
   const [activeClientTotals, setActiveClientTotals] = useState<{ total_revenue: number; projects: Array<{ project_id: number; project_code: string; project_name: string; department?: string; total_revenue: number }> } | null>(null)
   const [activeSupplierTotals, setActiveSupplierTotals] = useState<{ total_expense: number; projects: Array<{ project_id: number; project_code: string; project_name: string; department?: string; total_expense: number }> } | null>(null)
-  const [analytics, setAnalytics] = useState<DirectorAnalytics | null>(null)
 
   const formatMAD = (v: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'MAD' }).format(v)
   const sumClientRevenue = clients.reduce((acc: number, client: Client) => acc + Number(client.total_revenue || 0), 0)
@@ -131,19 +103,9 @@ export default function MasterDataPage() {
     }
   }
 
-  const loadAnalytics = async () => {
-    try {
-      const { data } = await http.get("/api/management/all/statistics/")
-      setAnalytics(data || null)
-    } catch {
-      setAnalytics(null)
-    }
-  }
-
   useEffect(() => {
     loadClients()
     loadSuppliers()
-    loadAnalytics()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -183,93 +145,6 @@ export default function MasterDataPage() {
         <h1 className="text-3xl font-bold text-foreground">{t("admin.masterData")}</h1>
         <p className="text-muted-foreground">{t("admin.directorHelp")}</p>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Analyse DG - Alertes</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-md border p-3">
-                <div className="text-muted-foreground">Projets en retard</div>
-                <div className="text-xl font-semibold text-red-600">{analytics?.kpis?.overdue_projects ?? 0}</div>
-              </div>
-              <div className="rounded-md border p-3">
-                <div className="text-muted-foreground">Terminés non soldés</div>
-                <div className="text-xl font-semibold text-amber-600">{analytics?.kpis?.completed_unpaid_projects ?? 0}</div>
-              </div>
-              <div className="rounded-md border p-3">
-                <div className="text-muted-foreground">Retard + non encaissé</div>
-                <div className="text-xl font-semibold text-red-700">{analytics?.kpis?.overdue_unpaid_projects ?? 0}</div>
-              </div>
-              <div className="rounded-md border p-3">
-                <div className="text-muted-foreground">Montant à risque</div>
-                <div className="text-lg font-semibold text-red-700">{formatMAD(analytics?.kpis?.overdue_unpaid_amount || 0)}</div>
-              </div>
-            </div>
-
-            <div className="text-xs text-muted-foreground">
-              Taux d'encaissement global: <span className="font-medium text-foreground">{analytics?.kpis?.collection_rate_percent ?? 0}%</span>
-            </div>
-            <div className="text-xs text-muted-foreground">
-              Marge globale: <span className="font-medium text-foreground">{formatMAD(analytics?.kpis?.margin_value || 0)}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Top clients exposés</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {(analytics?.top_clients_exposure || []).slice(0, 5).map((item) => (
-              <div key={item.client} className="flex items-center justify-between rounded-md border p-3 text-sm">
-                <div>
-                  <div className="font-medium">{item.client}</div>
-                  <div className="text-xs text-muted-foreground">{item.projects_count} projets</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-semibold text-red-700">{formatMAD(item.remaining_to_collect)}</div>
-                  <div className="text-xs text-muted-foreground">Encaissé: {formatMAD(item.collected)}</div>
-                </div>
-              </div>
-            ))}
-            {(!analytics?.top_clients_exposure || analytics.top_clients_exposure.length === 0) && (
-              <div className="text-sm text-muted-foreground">Aucune exposition client critique.</div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Projets nécessitant une action immédiate</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {(analytics?.projects_needing_attention || []).slice(0, 6).map((item) => (
-              <div key={item.project_id} className="grid grid-cols-1 md:grid-cols-4 gap-2 rounded-md border p-3 text-sm">
-                <div className="md:col-span-2">
-                  <div className="font-medium">{item.project_code} - {item.project_name}</div>
-                  <div className="text-xs text-muted-foreground">{item.department || "-"} • Client: {item.client || "-"}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Jours retard</div>
-                  <div className="font-semibold">{item.days_overdue}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Reste à encaisser</div>
-                  <div className="font-semibold text-red-700">{formatMAD(item.remaining_to_collect)}</div>
-                </div>
-              </div>
-            ))}
-            {(!analytics?.projects_needing_attention || analytics.projects_needing_attention.length === 0) && (
-              <div className="text-sm text-muted-foreground">Aucune alerte critique pour le moment.</div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
 
       <div className="grid grid-cols-1 gap-6">
         {/* Clients */}

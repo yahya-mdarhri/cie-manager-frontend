@@ -17,6 +17,33 @@ import CreateClientForm from "@/components/forms/create-client-form"
 import CreateSupplierForm from "@/components/forms/create-supplier-form"
 import { useRecentActivity } from "@/hooks/use-recent-activity"
 
+interface DirectorAnalytics {
+  kpis?: {
+    overdue_projects: number
+    completed_unpaid_projects: number
+    overdue_unpaid_projects: number
+    overdue_unpaid_amount: number
+    collection_rate_percent: number
+    margin_value: number
+  }
+  projects_needing_attention?: Array<{
+    project_id: number
+    project_code: string
+    project_name: string
+    department?: string | null
+    status: string
+    days_overdue: number
+    remaining_to_collect: number
+    client?: string | null
+  }>
+  top_clients_exposure?: Array<{
+    client: string
+    projects_count: number
+    remaining_to_collect: number
+    collected: number
+  }>
+}
+
 export default function Dashboard() {
   const { user } = useAuth()
   const { t, language } = useLanguage()
@@ -35,6 +62,7 @@ export default function Dashboard() {
     Completed: 0,
     Cancelled: 0,
   })
+  const [analytics, setAnalytics] = useState<DirectorAnalytics | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -56,6 +84,12 @@ export default function Dashboard() {
             const payments = (prow?.results || prow) ?? []
             paymentsTotal = payments.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0)
           } catch {}
+          try {
+            const { data: sraw } = await http.get(`${base}/all/statistics/`)
+            setAnalytics(sraw || null)
+          } catch {
+            setAnalytics(null)
+          }
         } else if (user.role === "department_manager" && user.department) {
           // Fetch projects for the manager's department (normalize department id if it's an object)
           const depId =
@@ -192,6 +226,97 @@ export default function Dashboard() {
           trend={{ value: 0, isPositive: false }}
         />
       </div>
+
+      {user?.role === "director" && (
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Analyse DG - Alertes</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-md border p-3">
+                    <div className="text-muted-foreground">Projets en retard</div>
+                    <div className="text-xl font-semibold text-red-600">{analytics?.kpis?.overdue_projects ?? 0}</div>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <div className="text-muted-foreground">Terminés non soldés</div>
+                    <div className="text-xl font-semibold text-amber-600">{analytics?.kpis?.completed_unpaid_projects ?? 0}</div>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <div className="text-muted-foreground">Retard + non encaissé</div>
+                    <div className="text-xl font-semibold text-red-700">{analytics?.kpis?.overdue_unpaid_projects ?? 0}</div>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <div className="text-muted-foreground">Montant à risque</div>
+                    <div className="text-lg font-semibold text-red-700">{fmt(analytics?.kpis?.overdue_unpaid_amount || 0)}</div>
+                  </div>
+                </div>
+
+                <div className="text-xs text-muted-foreground">
+                  Taux d'encaissement global: <span className="font-medium text-foreground">{analytics?.kpis?.collection_rate_percent ?? 0}%</span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Marge globale: <span className="font-medium text-foreground">{fmt(analytics?.kpis?.margin_value || 0)}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Top clients exposés</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {(analytics?.top_clients_exposure || []).slice(0, 5).map((item) => (
+                  <div key={item.client} className="flex items-center justify-between rounded-md border p-3 text-sm">
+                    <div>
+                      <div className="font-medium">{item.client}</div>
+                      <div className="text-xs text-muted-foreground">{item.projects_count} projets</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-semibold text-red-700">{fmt(item.remaining_to_collect)}</div>
+                      <div className="text-xs text-muted-foreground">Encaissé: {fmt(item.collected)}</div>
+                    </div>
+                  </div>
+                ))}
+                {(!analytics?.top_clients_exposure || analytics.top_clients_exposure.length === 0) && (
+                  <div className="text-sm text-muted-foreground">Aucune exposition client critique.</div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Projets nécessitant une action immédiate</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {(analytics?.projects_needing_attention || []).slice(0, 6).map((item) => (
+                  <div key={item.project_id} className="grid grid-cols-1 md:grid-cols-4 gap-2 rounded-md border p-3 text-sm">
+                    <div className="md:col-span-2">
+                      <div className="font-medium">{item.project_code} - {item.project_name}</div>
+                      <div className="text-xs text-muted-foreground">{item.department || "-"} • Client: {item.client || "-"}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Jours retard</div>
+                      <div className="font-semibold">{item.days_overdue}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Reste à encaisser</div>
+                      <div className="font-semibold text-red-700">{fmt(item.remaining_to_collect)}</div>
+                    </div>
+                  </div>
+                ))}
+                {(!analytics?.projects_needing_attention || analytics.projects_needing_attention.length === 0) && (
+                  <div className="text-sm text-muted-foreground">Aucune alerte critique pour le moment.</div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       {/* Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
