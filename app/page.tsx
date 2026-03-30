@@ -221,24 +221,24 @@ export default function Dashboard() {
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <button type="button" onClick={() => router.push("/projects")} className="text-left">
+        <button type="button" onClick={() => router.push("/projects")} className="cursor-pointer text-left">
           <MetricCard title={t("dashboard.activeProjects")} value={String(metrics.projects)}  trend={{ value: 0, isPositive: true }} />
         </button>
-        <button type="button" onClick={() => router.push("/projects")} className="text-left">
+        <button type="button" onClick={() => router.push("/projects")} className="cursor-pointer text-left">
           <MetricCard
             title={t("dashboard.totalBudget")}
             value={fmt(metrics.totalBudget)}
             trend={{ value: 0, isPositive: true }}
           />
         </button>
-        <button type="button" onClick={() => router.push("/revenues")} className="text-left">
+        <button type="button" onClick={() => router.push("/revenues")} className="cursor-pointer text-left">
           <MetricCard
             title={t("dashboard.budgetEngaged")}
             value={fmt(metrics.committedBudget)}
             trend={{ value: 0, isPositive: true }}
           />
         </button>
-        <button type="button" onClick={() => router.push("/expenses")} className="text-left">
+        <button type="button" onClick={() => router.push("/expenses")} className="cursor-pointer text-left">
           <MetricCard
             title={t("dashboard.remainingBudget")}
             value={fmt(metrics.remainingBudget)}
@@ -256,19 +256,19 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <button type="button" onClick={() => router.push("/projects?risk=overdue")} className="rounded-md border p-3 text-left hover:bg-muted/40 transition-colors">
+                  <button type="button" onClick={() => router.push("/projects?risk=overdue")} className="cursor-pointer rounded-md border p-3 text-left hover:bg-muted/40 transition-colors">
                     <div className="text-muted-foreground">Projets en retard</div>
                     <div className="text-xl font-semibold text-red-600">{analytics?.kpis?.overdue_projects ?? 0}</div>
                   </button>
-                  <button type="button" onClick={() => router.push("/projects?risk=completed_unpaid")} className="rounded-md border p-3 text-left hover:bg-muted/40 transition-colors">
+                  <button type="button" onClick={() => router.push("/projects?risk=completed_unpaid")} className="cursor-pointer rounded-md border p-3 text-left hover:bg-muted/40 transition-colors">
                     <div className="text-muted-foreground">Terminés non soldés</div>
                     <div className="text-xl font-semibold text-amber-600">{analytics?.kpis?.completed_unpaid_projects ?? 0}</div>
                   </button>
-                  <button type="button" onClick={() => router.push("/projects?risk=overdue_unpaid")} className="rounded-md border p-3 text-left hover:bg-muted/40 transition-colors">
+                  <button type="button" onClick={() => router.push("/projects?risk=overdue_unpaid")} className="cursor-pointer rounded-md border p-3 text-left hover:bg-muted/40 transition-colors">
                     <div className="text-muted-foreground">Retard + non encaissé</div>
                     <div className="text-xl font-semibold text-red-700">{analytics?.kpis?.overdue_unpaid_projects ?? 0}</div>
                   </button>
-                  <button type="button" onClick={() => router.push("/projects?risk=overdue_unpaid")} className="rounded-md border p-3 text-left hover:bg-muted/40 transition-colors">
+                  <button type="button" onClick={() => router.push("/projects?risk=overdue_unpaid")} className="cursor-pointer rounded-md border p-3 text-left hover:bg-muted/40 transition-colors">
                     <div className="text-muted-foreground">Montant à risque</div>
                     <div className="text-lg font-semibold text-red-700">{fmt(analytics?.kpis?.overdue_unpaid_amount || 0)}</div>
                   </button>
@@ -289,7 +289,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {(analytics?.top_clients_exposure || []).slice(0, 5).map((item) => (
-                  <button type="button" key={item.client} onClick={() => router.push(`/projects?q=${encodeURIComponent(item.client)}`)} className="flex w-full items-center justify-between rounded-md border p-3 text-left text-sm hover:bg-muted/40 transition-colors">
+                  <button type="button" key={item.client} onClick={() => router.push(`/projects?q=${encodeURIComponent(item.client)}`)} className="flex w-full cursor-pointer items-center justify-between rounded-md border p-3 text-left text-sm hover:bg-muted/40 transition-colors">
                     <div>
                       <div className="font-medium">{item.client}</div>
                       <div className="text-xs text-muted-foreground">{item.projects_count} projets</div>
@@ -314,7 +314,7 @@ export default function Dashboard() {
             <CardContent>
               <div className="space-y-2">
                 {(analytics?.projects_needing_attention || []).slice(0, 6).map((item) => (
-                  <button type="button" key={item.project_id} onClick={() => router.push(`/projects?q=${encodeURIComponent(item.project_code)}`)} className="grid w-full grid-cols-1 md:grid-cols-4 gap-2 rounded-md border p-3 text-left text-sm hover:bg-muted/40 transition-colors">
+                  <button type="button" key={item.project_id} onClick={() => router.push(`/projects?q=${encodeURIComponent(item.project_code)}`)} className="grid w-full cursor-pointer grid-cols-1 md:grid-cols-4 gap-2 rounded-md border p-3 text-left text-sm hover:bg-muted/40 transition-colors">
                     <div className="md:col-span-2">
                       <div className="font-medium">{item.project_code} - {item.project_name}</div>
                       <div className="text-xs text-muted-foreground">{item.department || "-"} • Client: {item.client || "-"}</div>
@@ -352,7 +352,7 @@ export default function Dashboard() {
           <CardContent>
             <div className="space-y-4 max-h-56 overflow-y-auto sm:max-h-none sm:overflow-visible pr-1">
               {recent.map((it, idx) => (
-                <button type="button" key={idx} onClick={() => router.push(it.href)} className="flex w-full items-center justify-between p-3 bg-muted/50 rounded-lg text-left hover:bg-muted transition-colors">
+                <button type="button" key={idx} onClick={() => router.push(it.href)} className="flex w-full cursor-pointer items-center justify-between rounded-lg bg-muted/50 p-3 text-left hover:bg-muted transition-colors">
                   <div>
                     <p className="font-medium">{it.title}</p>
                     <p className="text-sm text-muted-foreground truncate max-w-[70vw] sm:max-w-none">{it.subtitle}</p>
@@ -373,28 +373,28 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <button type="button" onClick={() => router.push("/projects?status=In%20Progress")} className="flex w-full items-center justify-between rounded-md p-1 text-left hover:bg-muted/40 transition-colors">
+              <button type="button" onClick={() => router.push("/projects?status=In%20Progress")} className="flex w-full cursor-pointer items-center justify-between rounded-md p-1 text-left hover:bg-muted/40 transition-colors">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 bg-green-500 rounded-full"></div>
                   <span>{t("status.inProgress")}</span>
                 </div>
                 <span className="font-medium">{statusCounts["In Progress"]} {statusCounts["In Progress"] === 1 ? t("common.units.project.singular") : t("common.units.project.plural")}</span>
               </button>
-              <button type="button" onClick={() => router.push("/projects?status=Paused")} className="flex w-full items-center justify-between rounded-md p-1 text-left hover:bg-muted/40 transition-colors">
+              <button type="button" onClick={() => router.push("/projects?status=Paused")} className="flex w-full cursor-pointer items-center justify-between rounded-md p-1 text-left hover:bg-muted/40 transition-colors">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 bg-yellow-500 rounded-full"></div>
                   <span>{t("common.onPause")}</span>
                 </div>
                 <span className="font-medium">{statusCounts["Paused"]} {statusCounts["Paused"] === 1 ? t("common.units.project.singular") : t("common.units.project.plural")}</span>
               </button>
-              <button type="button" onClick={() => router.push("/projects?status=Completed")} className="flex w-full items-center justify-between rounded-md p-1 text-left hover:bg-muted/40 transition-colors">
+              <button type="button" onClick={() => router.push("/projects?status=Completed")} className="flex w-full cursor-pointer items-center justify-between rounded-md p-1 text-left hover:bg-muted/40 transition-colors">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 bg-blue-500 rounded-full"></div>
                   <span>{t("status.completed")}</span>
                 </div>
                 <span className="font-medium">{statusCounts["Completed"]} {statusCounts["Completed"] === 1 ? t("common.units.project.singular") : t("common.units.project.plural")}</span>
               </button>
-              <button type="button" onClick={() => router.push("/projects?status=Cancelled")} className="flex w-full items-center justify-between rounded-md p-1 text-left hover:bg-muted/40 transition-colors">
+              <button type="button" onClick={() => router.push("/projects?status=Cancelled")} className="flex w-full cursor-pointer items-center justify-between rounded-md p-1 text-left hover:bg-muted/40 transition-colors">
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 bg-red-500 rounded-full"></div>
                   <span>{t("status.cancelled")}</span>
