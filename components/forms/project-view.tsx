@@ -31,7 +31,6 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { http } from "@/lib/http"
-import { API_BASE } from "@/lib/utils"
 import jsPDF from "jspdf"
 import { useLanguage } from "@/lib/language-context"
 import JalonManagement from "./jalon-management"
@@ -101,13 +100,6 @@ export default function ProjectViewModal({
   const tt = (k: string, d: string) => {
     const s = t(k as any)
     return typeof s === "string" && s.includes(".") ? d : s
-  }
-
-  const resolveMediaUrl = (url?: string) => {
-    if (!url) return url
-    if (url.startsWith("http://") || url.startsWith("https://")) return url
-    if (url.startsWith("/")) return `${API_BASE}${url}`
-    return url
   }
   const statusLabel = (s?: string) => {
     switch (s) {
@@ -391,7 +383,7 @@ export default function ProjectViewModal({
             type: (data.contract_documents.split(".").pop() || "pdf").toUpperCase(),
             size: "-",
             uploadDate: "-",
-            url: resolveMediaUrl(data.contract_documents),
+            url: data.contract_documents,
           })
         }
         // include project steps' execution_proof (if available)
@@ -409,7 +401,7 @@ export default function ProjectViewModal({
                   type: (s.execution_proof.split(".").pop() || "pdf").toUpperCase(),
                   size: "-",
                   uploadDate: s.created_at ? s.created_at.split("T")[0] : "-",
-                  url: resolveMediaUrl(s.execution_proof),
+                  url: s.execution_proof,
                 })
               }
             }
@@ -1098,7 +1090,7 @@ export default function ProjectViewModal({
               type: (data.contract_documents.split(".").pop() || "pdf").toUpperCase(),
               size: "-",
               uploadDate: "-",
-              url: resolveMediaUrl(data.contract_documents),
+              url: data.contract_documents,
             })
           }
           setDocuments(docs)
