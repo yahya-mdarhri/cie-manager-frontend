@@ -88,7 +88,6 @@ interface Document {
   size: string
   uploadDate: string
   url?: string
-  kind?: "contract" | "step" | "project_document"
 }
 
 export default function ProjectViewModal({
@@ -109,50 +108,6 @@ export default function ProjectViewModal({
     if (url.startsWith("http://") || url.startsWith("https://")) return url
     if (url.startsWith("/")) return `${API_BASE}${url}`
     return url
-  }
-
-  const buildDocumentList = (data: any): Document[] => {
-  const docs: Document[] = []
-  if (data?.contract_documents) {
-    docs.push({
-      id: -1,
-      kind: "contract",
-      name: data.contract_documents.split("/").pop() || "contract",
-      type: (data.contract_documents.split(".").pop() || "pdf").toUpperCase(),
-      size: "-",
-      uploadDate: "-",
-      url: resolveMediaUrl(data.contract_documents),
-    })
-  }
-  if (Array.isArray(data?.documents)) {
-    for (const doc of data.documents) {
-      docs.push({
-        id: doc.id,
-        kind: "project_document",
-        name: doc.name || doc.file?.split("/").pop() || "document",
-        type: (doc.file?.split(".").pop() || "pdf").toUpperCase(),
-        size: "-",
-        uploadDate: doc.uploaded_at ? doc.uploaded_at.split("T")[0] : "-",
-        url: resolveMediaUrl(doc.file),
-      })
-    }
-  }
-  if (Array.isArray(data?.steps)) {
-    for (const s of data.steps) {
-      if (s.execution_proof) {
-        docs.push({
-          id: s.id,
-          kind: "step",
-          name: s.execution_proof.split("/").pop() || `jalon-${s.id}`,
-          type: (s.execution_proof.split(".").pop() || "pdf").toUpperCase(),
-          size: "-",
-          uploadDate: s.created_at ? s.created_at.split("T")[0] : "-",
-          url: resolveMediaUrl(s.execution_proof),
-        })
-      }
-    }
-  }
-  return docs
   }
   const statusLabel = (s?: string) => {
     switch (s) {
@@ -427,11 +382,43 @@ export default function ProjectViewModal({
           // Set selected client ID for edit form
           setSelectedClientId(data.client || null)
         }
-        const { data: stepsRaw } = await http.get(
-          `/api/management/departments/${depId}/projects/${project.id}/steps/`,
-        )
-        const steps = stepsRaw?.results || stepsRaw || []
-        setDocuments(buildDocumentList({ ...data, steps }))
+        const docs: Document[] = []
+        // contract_documents may be a URL string
+        if (data?.contract_documents) {
+          docs.push({
+            id: -1,
+            name: data.contract_documents.split("/").pop() || "contract",
+            type: (data.contract_documents.split(".").pop() || "pdf").toUpperCase(),
+            size: "-",
+            uploadDate: "-",
+            url: resolveMediaUrl(data.contract_documents),
+          })
+        }
+        // include project steps' execution_proof (if available)
+        try {
+          const { data: stepsRaw } = await http.get(
+            `/api/management/departments/${depId}/projects/${project.id}/steps/`,
+          )
+          const steps = stepsRaw?.results || stepsRaw || []
+          if (Array.isArray(steps)) {
+            for (const s of steps) {
+              if (s.execution_proof) {
+                docs.push({
+                  id: s.id,
+                  name: s.execution_proof.split("/").pop() || `jalon-${s.id}`,
+                  type: (s.execution_proof.split(".").pop() || "pdf").toUpperCase(),
+                  size: "-",
+                  uploadDate: s.created_at ? s.created_at.split("T")[0] : "-",
+                  url: resolveMediaUrl(s.execution_proof),
+                })
+              }
+            }
+          }
+        } catch (e) {
+          // ignore steps fetch errors here
+        }
+
+        setDocuments(docs)
       } catch (err) {
         console.error("Error fetching project details/documents:", err)
       } finally {
@@ -1088,36 +1075,46 @@ export default function ProjectViewModal({
   }
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []) as File[]
-    if (files.length === 0) return
-    ; (async () => {
-      try {
-        if (!project.id || !depId) throw new Error("Project context missing")
-        const fd = new FormData()
-        for (const file of files) {
-          fd.append("files", file)
+    const file = event.target.files?.[0]
+    if (file) {
+      // upload contract document to project via PATCH
+      ; (async () => {
+        try {
+          if (!project.id || !depId) throw new Error("Project context missing")
+          const fd = new FormData()
+          fd.append("contract_documents", file)
+          // let axios/browser set Content-Type
+          await http.patch(
+            `/api/management/departments/${depId}/projects/${project.id}/`,
+            fd,
+          )
+          // refresh documents
+          const { data } = await http.get(`/api/management/departments/${depId}/projects/${project.id}/`)
+          const docs: Document[] = []
+          if (data?.contract_documents) {
+            docs.push({
+              id: -1,
+              name: data.contract_documents.split("/").pop() || "contract",
+              type: (data.contract_documents.split(".").pop() || "pdf").toUpperCase(),
+              size: "-",
+              uploadDate: "-",
+              url: resolveMediaUrl(data.contract_documents),
+            })
+          }
+          setDocuments(docs)
+        } catch (err) {
+          console.error("Failed to upload document:", err)
+          alert(t("projectView.errors.uploadDocument"))
         }
-        // let axios/browser set Content-Type
-        await http.post(
-          `/api/management/departments/${depId}/projects/${project.id}/documents/create/`,
-          fd,
-        )
-        // refresh documents
-        const { data } = await http.get(`/api/management/departments/${depId}/projects/${project.id}/`)
-        setDocuments(buildDocumentList({ ...data, steps: projectSteps }))
-        event.target.value = ""
-      } catch (err) {
-        console.error("Failed to upload document:", err)
-        alert(t("projectView.errors.uploadDocument"))
-      }
-    })()
+      })()
+    }
   }
 
   const handleDeleteDocument = async (doc: Document) => {
     if (!project.id || !depId) return
     // If it's the contract document (id === -1), clear it via PATCH
     try {
-      if (doc.kind === "contract" || doc.id === -1) {
+      if (doc.id === -1) {
         // send FormData with empty value to clear the file
         const fd = new FormData()
         // Some DRF setups accept an empty string to clear file fields
@@ -1126,15 +1123,7 @@ export default function ProjectViewModal({
           `/api/management/departments/${depId}/projects/${project.id}/`,
           fd,
         )
-        setDocuments((prev: Document[]) => prev.filter((d) => d.id !== doc.id))
-        return
-      }
-
-      if (doc.kind === "project_document") {
-        await http.delete(
-          `/api/management/departments/${depId}/projects/${project.id}/documents/${doc.id}/`,
-        )
-        setDocuments((prev: Document[]) => prev.filter((d) => d.id !== doc.id))
+        setDocuments((prev) => prev.filter((d) => d.id !== doc.id))
         return
       }
 
@@ -1144,7 +1133,7 @@ export default function ProjectViewModal({
         `/api/management/departments/${depId}/projects/${project.id}/steps/${doc.id}/`,
         { execution_proof: null },
       )
-      setDocuments((prev: Document[]) => prev.filter((d) => d.id !== doc.id))
+      setDocuments((prev) => prev.filter((d) => d.id !== doc.id))
     } catch (err) {
       console.error("Failed to delete document:", err)
       alert(t("projectView.errors.deleteDocument"))
@@ -1461,7 +1450,7 @@ export default function ProjectViewModal({
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">{t("projectView.documents.title")}</h3>
               <div>
-                <input type="file" id="file-upload" className="hidden" multiple onChange={handleFileUpload} />
+                <input type="file" id="file-upload" className="hidden" onChange={handleFileUpload} />
                 <Button onClick={() => document.getElementById("file-upload")?.click()}>
                   <Upload className="h-4 w-4 mr-2" />
                   {t("projectView.documents.upload")}
